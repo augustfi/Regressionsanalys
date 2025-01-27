@@ -1,4 +1,62 @@
 ```{r}
 bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project 1/Regressionsanalys/bodyfatmen.csv", header = TRUE)
+
+# Kontrollera att filen laddats korrekt
+str(bodyfatmen)
+head(bodyfatmen)
+```
+
+```{r}
+
+summary(bodyfatmen)
+
+```
+
+```{r}
+cor(bodyfatmen)
+
+```
+
+```{r}
+pairs(bodyfatmen)
+
+```
+```{r}
+full_model <- lm(density ~ ., data = bodyfatmen)
+summary(full_model)
+par(mfrow = c(2, 2))  # Arrange diagnostic plots in a 2x2 grid
+plot(full_model)
+
+
+```
+```{r}
+library(MASS)
+stepwise_model <- stepAIC(full_model, direction = "both")
+summary(stepwise_model)
+
+```
+
+```{r}
+
+library(leaps)
+best_subset <- regsubsets(density ~ ., data = bodyfatmen, nbest = 5)
+summary(best_subset)
+
+```
+
+```{r}
+# Create a new data point
+new_data <- data.frame(age = 25, weight = 175, height = 70, neck = 36, chest = 95, abdomen = 90, hip = 100, thigh = 60, knee= 100, ankle = 100, biceps= 100, forearm= 100, wrist=100)
+
+# Predict with confidence intervals
+predict(full_model, newdata = new_data, interval = "confidence")
+
+```
+
+```{r}
+library(boot)
+cv_error <- cv.glm(bodyfatmen, full_model, K = 10)
+cv_error$delta
+
 ```
 
