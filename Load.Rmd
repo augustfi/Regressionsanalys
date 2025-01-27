@@ -1,0 +1,4 @@
+```{r}
+bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project 1/Regressionsanalys/bodyfatmen.csv", header = TRUE)
+```
+
