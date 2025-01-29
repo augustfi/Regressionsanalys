@@ -5,8 +5,66 @@ bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys
 str(bodyfatmen)
 head(bodyfatmen)
 ```
-
 ```{r}
+# Load necessary libraries
+library(car)   # For avPlots
+library(MASS)  # For studres
+library(MPV)   # If needed
+
+# Load data
+bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project 1/Regressionsanalys/bodyfatmen.csv", header = TRUE)
+
+# Define dependent and independent variables
+# Assuming body fat percentage (density) is the response variable,
+# and using weight, height, abdomen, and wrist as predictors.
+bodyfat.model <- lm(density ~ weight + height + abdomen + wrist, data=bodyfatmen)
+
+# (a) Residual Analysis
+
+# Normal probability plot of residuals
+par(mfrow = c(1, 1))
+qqnorm(rstudent(bodyfat.model))
+qqline(rstudent(bodyfat.model))
+
+# Residuals vs. fitted values
+plot(bodyfat.model$fitted.values, bodyfat.model$residuals)
+
+# Residuals vs. regressors
+par(mfrow = c(2, 2))
+plot(bodyfatmen$weight, bodyfat.model$residuals, main="Weight vs Residuals")
+plot(bodyfatmen$height, bodyfat.model$residuals, main="Height vs Residuals")
+plot(bodyfatmen$abdomen, bodyfat.model$residuals, main="Abdomen vs Residuals")
+plot(bodyfatmen$wrist, bodyfat.model$residuals, main="Wrist vs Residuals")
+
+# Partial residual plots
+avPlots(bodyfat.model)
+
+# Studentized residuals
+par(mfrow = c(1, 2))
+plot(studres(bodyfat.model), main="Studentized Residuals")
+plot(rstudent(bodyfat.model), main="R-Student Residuals")
+
+# (b) Data Transformation
+par(mfrow = c(1, 1))
+boxcox(bodyfat.model)   # Box-Cox transformation suggestion
+
+# Try polynomial term if a variable shows curvature
+bodyfat.model2 <- lm(density ~ weight + height + abdomen + I(abdomen^2) + wrist, data=bodyfatmen)
+summary(bodyfat.model2)
+
+# Residual plots for the new model
+par(mfrow = c(2, 2))
+plot(bodyfat.model2)
+
+# Partial residual plots for the improved model
+par(mfrow = c(1, 1))
+avPlots(bodyfat.model2)
+
+```
+
+
+
+```{r OTHER}
 
 summary(bodyfatmen)
 
