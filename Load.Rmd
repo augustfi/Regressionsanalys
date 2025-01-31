@@ -5,40 +5,65 @@ bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys
 str(bodyfatmen)
 head(bodyfatmen)
 ```
+
 ```{r}
 # Load necessary libraries
 library(car)   # For avPlots
 library(MASS)  # For studres
 library(MPV)   # If needed
+```
 
+
+```{r}
 # Load data
 bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project 1/Regressionsanalys/bodyfatmen.csv", header = TRUE)
+```
 
+
+```{r}
 # Define dependent and independent variables
 # Assuming body fat percentage (density) is the response variable,
 # and using weight, height, abdomen, and wrist as predictors.
-bodyfat.model <- lm(density ~ weight + height + abdomen + wrist, data=bodyfatmen)
+bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data=bodyfatmen)
+```
 
+
+```{r}
 # (a) Residual Analysis
 
 # Normal probability plot of residuals
 par(mfrow = c(1, 1))
 qqnorm(rstudent(bodyfat.model))
 qqline(rstudent(bodyfat.model))
+```
 
+
+```{r}
 # Residuals vs. fitted values
 plot(bodyfat.model$fitted.values, bodyfat.model$residuals)
+```
 
+
+```{r}
 # Residuals vs. regressors
-par(mfrow = c(2, 2))
+par(mfrow = c(1, 1))
 plot(bodyfatmen$weight, bodyfat.model$residuals, main="Weight vs Residuals")
+```
+```{r}
+par(mfrow = c(2, 2))
 plot(bodyfatmen$height, bodyfat.model$residuals, main="Height vs Residuals")
 plot(bodyfatmen$abdomen, bodyfat.model$residuals, main="Abdomen vs Residuals")
 plot(bodyfatmen$wrist, bodyfat.model$residuals, main="Wrist vs Residuals")
+```
 
+
+```{r}
 # Partial residual plots
 avPlots(bodyfat.model)
+```
 
+
+```{r}
 # Studentized residuals
 par(mfrow = c(1, 2))
 plot(studres(bodyfat.model), main="Studentized Residuals")
@@ -64,9 +89,20 @@ avPlots(bodyfat.model2)
 
 
 
-```{r OTHER}
+```{r Summary Statistics Latex code}
+# Install and load xtable
+install.packages("xtable")  # Install if not already installed
+library(xtable)
 
-summary(bodyfatmen)
+# Get the summary
+summary_stats <- summary(bodyfatmen)
+
+# Convert to a LaTeX table
+latex_table <- xtable(summary_stats)
+
+# Print LaTeX code
+print(latex_table, type = "latex")
+
 
 ```
 

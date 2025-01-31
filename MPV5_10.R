@@ -4,6 +4,8 @@
 # (a) Thorough residual analysis
 library(MPV)
 pressure <- table.b9  # overwrites a base dataset, apparently
+str(pressure)
+head(pressure)
 
 # Take the full model: all regression variables
 pressure.model <- lm(y ~ x1 + x2 + x3 + x4, data=pressure)
