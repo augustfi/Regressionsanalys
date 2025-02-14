@@ -20,14 +20,19 @@ library(MPV)   # If needed
 bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data=bodyfatmen)
 ```
 
-```{r Coding Histogram}
+```{r Coding Histogram and QQ-plot}
 model_residuals =bodyfat.model$residuals
 hist(model_residuals)
-```
-
-```{r Coding QQ-plot}
 qqnorm(rstudent(bodyfat.model))
 qqline(rstudent(bodyfat.model))
+#Alternative plots using olsrr library
+ols_plot_resid_hist(bodyfat.model)
+ols_plot_resid_qq(bodyfat.model)
+
+#there are numerous ways of testinf normality. another way is the shapiro-wilk normality test:https://www.youtube.com/watch?v=seQokNAEpkM&list=PLqdBkA4Dl3KqNqXe41mOLbpOBLpLZbPI9&index=10
+
+shapiro.test(bodyfat.model$residuals)
+#if this test would be significant with a significance level of 0.05, we would have a violation of the normality assumption (H0: there is a normality -> p<=0.05 we reject H0, but for us p-value = 0.1212 on bodyfat.model)
 ```
 
 ```{r Coding res v fit}
@@ -37,7 +42,7 @@ abline(0,0)
 ```
 
 ```{r Coding res v leverage and cooks distance}
-#outlier detection using ols
+#outlier detection using ols: https://www.youtube.com/watch?v=EOtXGwUU81w&list=PLqdBkA4Dl3KqNqXe41mOLbpOBLpLZbPI9&index=7
 
 #install.packages("olsrr")
 #if you havent installed olsrr, remove commenting above to install.packages("olsrr")
@@ -51,7 +56,23 @@ ols_plot_cooksd_chart(bodyfat.model)
 
 ```
 
+```{r Coding testing for homocedasticity}
+#https://www.youtube.com/watch?v=k_oDaBeIaz4&list=PLqdBkA4Dl3KqNqXe41mOLbpOBLpLZbPI9&index=6
 
+ols_test_breusch_pagan(bodyfat.model)
+#Prob > Chi2   =    0.4612199  meaning we can not reject the Ho based on significance level 0.05 (we cannot reject the variance is constant)
+```
+
+```{r Coding testing the absence of multicollinearity}
+#https://www.youtube.com/watch?v=70njB2aqZuU&list=PLqdBkA4Dl3KqNqXe41mOLbpOBLpLZbPI9&index=11
+
+library(car)
+vif(bodyfat.model)
+#From lecture 7 on multicollinearity: "A VIF above 5 or 10 suggests significant multicollinearity and poor estimation of the associated coefficients". 
+#Results show above 10: weight=33.509320, chest=9.460877, hip= 14.796520
+#Results show above 5: chest= 9.460877, thigh= 7.777865
+
+```
 
 
 
