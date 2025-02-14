@@ -1,92 +1,695 @@
-```{r}
-bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project 1/Regressionsanalys/bodyfatmen.csv", header = TRUE)
-
+```{r Load in data}
+# bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
+# bodyfatmen <- read.csv("/home/a/u/augustfi/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
+bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
 # Kontrollera att filen laddats korrekt
-str(bodyfatmen)
-head(bodyfatmen)
+# str(bodyfatmen)
+# head(bodyfatmen)
 ```
 
-```{r}
+```{r Libraries}
 # Load necessary libraries
+#update.packages(ask=FALSE)
+#install.packages("car")
+
 library(car)   # For avPlots
 library(MASS)  # For studres
 library(MPV)   # If needed
 ```
 
-
-```{r}
-# Load data
-bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project 1/Regressionsanalys/bodyfatmen.csv", header = TRUE)
-```
-
-
-```{r}
+```{r Build model}
 # Define dependent and independent variables
 # Assuming body fat percentage (density) is the response variable,
 # and using weight, height, abdomen, and wrist as predictors.
 bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data=bodyfatmen)
 ```
 
-
 ```{r}
-# (a) Residual Analysis
+# Load necessary libraries
+library(car)    # For multicollinearity diagnostics
+library(leaps)  # For best subset selection
+library(glmnet) # For Ridge and Lasso
+library(boot)   # For cross-validation
+library(MASS)   # For stepwise selection
 
-# Normal probability plot of residuals
-par(mfrow = c(1, 1))
+# Load the dataset
+bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
+
+# Remove missing values
+bodyfatmen <- na.omit(bodyfatmen)
+
+# Define dependent and independent variables
+y <- bodyfatmen$density
+X <- bodyfatmen[, !(names(bodyfatmen) %in% c("density"))]
+# Compute Variance Inflation Factor (VIF)
+vif_results <- vif(lm(y ~ ., data=bodyfatmen))
+print(vif_results)
+# Perform best subset selection
+best_subset <- regsubsets(density ~ ., data=bodyfatmen, nvmax=ncol(X))
+
+# Get summary of best models
+best_summary <- summary(best_subset)
+
+# Display model selection criteria
+best_models <- data.frame(
+  Num_Variables = 1:length(best_summary$rsq),
+  Adjusted_R2 = best_summary$adjr2,
+  Cp = best_summary$cp,
+  BIC = best_summary$bic
+)
+
+print(best_models)
+
+
+```
+
+```{r Coding}
+model_residuals =bodyfat.model$residuals
+hist(model_residuals)
+```
+
+```{r Coding}
 qqnorm(rstudent(bodyfat.model))
 qqline(rstudent(bodyfat.model))
 ```
 
+```{r Coding}
+#outlier detection using ols
 
+#install.packages("olsrr")
+library(olsrr)
+
+#plot leverage and outliers
+ols_plot_resid_lev(bodyfat.model)
+
+#plot Cook's distance
+#ols_plot_cooksd_chart(bodyfat.model)
+
+```
 ```{r}
-# Residuals vs. fitted values
-plot(bodyfat.model$fitted.values, bodyfat.model$residuals)
+# Get the summary of the model
+model_summary <- summary(model)
+
+# Extract R-squared
+r_squared <- model_summary$r.squared
+adj_r_squared <- model_summary$adj.r.squared
+
+# Print the values
+print(paste("R-squared:", r_squared))
+print(paste("Adjusted R-squared:", adj_r_squared))
 ```
 
-
 ```{r}
-# Residuals vs. regressors
+library(MASS)
+bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen +
+                      hip + thigh + knee + ankle + biceps + forearm + wrist,
+                      data = bodyfatmen)
+
+bc <- boxcox(bodyfat.model, lambda = seq(-2, 2, 0.1))
+# Identify the lambda with the maximum log-likelihood:
+optimal_lambda <- bc$x[which.max(bc$y)]
+print(optimal_lambda)
+
+bodyfatmen$density_trans <- if(optimal_lambda == 0) {
+  log(bodyfatmen$density)
+} else {
+  (bodyfatmen$density^optimal_lambda - 1) / optimal_lambda
+}
+bodyfat_trans_model <- lm(density_trans ~ age + weight + height + neck + chest +
+                          abdomen + hip + thigh + knee + ankle + biceps +
+                          forearm + wrist, data = bodyfatmen)
+model_residuals =bodyfat_trans_model$residuals
+hist(model_residuals)
+qqnorm(rstudent(bodyfat_trans_model))
+qqline(rstudent(bodyfat_trans_model))
+
+```
+
+```{r QQ-plot and Studentized residual vs fitted value plot}
+# Create the "plots" folder if it doesn't already exist
+if (!dir.exists("plots")) {
+  dir.create("plots")
+}
+
+### 1. Save the basic residuals plot
+
+# Open a PNG device for the basic plot
+png("plots/plotResiduals_basic.png", width = 800, height = 600)
+
+# Compute R-student residuals and create the basic plot
+rstudent_residuals <- rstudent(bodyfat.model)
+plot(bodyfat.model$fitted.values, rstudent_residuals,
+     main = "Fitted Values vs R-student Residuals",
+     xlab = "Fitted Values",
+     ylab = "R-student Residuals",
+     pch = 19, col = "blue")
+abline(h = 0, lty = 2, col = "red")
+
+# Close the device so the file is saved
+dev.off()
+
+
+### 2. Save the residuals plot with outliers highlighted
+
+# Open a PNG device for the outlier-highlighted plot
+png("plots/plotResiduals_outliers.png", width = 800, height = 600)
+
+# Re-compute R-student residuals (if needed) and identify outliers
+rstudent_residuals <- rstudent(bodyfat.model)
+outlier_indices <- which(abs(rstudent_residuals) > 2)
+
+# Plot the residuals
+plot(bodyfat.model$fitted.values, rstudent_residuals,
+     main = "Fitted Values vs R-student Residuals",
+     xlab = "Fitted Values",
+     ylab = "R-student Residuals",
+     pch = 19, col = "blue")
+
+# Add reference lines at 0 and ±2 (for the outlier threshold)
+abline(h = c(0, 2, -2), lty = 2, col = c("red", "darkgray", "darkgray"))
+
+# Highlight outliers in red and add text labels for them
+points(bodyfat.model$fitted.values[outlier_indices],
+       rstudent_residuals[outlier_indices],
+       col = "red", pch = 19, cex = 1.2)
+text(bodyfat.model$fitted.values[outlier_indices],
+     rstudent_residuals[outlier_indices],
+     labels = outlier_indices, pos = 3, cex = 0.7, col = "black")
+
+# Close the device
+dev.off()
+
+
+### 3. Save the QQ plot of R-student residuals
+
+# Open a PNG device for the QQ plot
+png("plots/qqPlotResiduals.png", width = 800, height = 600)
+
+# Ensure a single plotting region and produce the QQ plot
 par(mfrow = c(1, 1))
-plot(bodyfatmen$weight, bodyfat.model$residuals, main="Weight vs Residuals")
-```
-```{r}
-par(mfrow = c(2, 2))
-plot(bodyfatmen$height, bodyfat.model$residuals, main="Height vs Residuals")
-plot(bodyfatmen$abdomen, bodyfat.model$residuals, main="Abdomen vs Residuals")
-plot(bodyfatmen$wrist, bodyfat.model$residuals, main="Wrist vs Residuals")
-```
+qqnorm(rstudent(bodyfat.model))
+qqline(rstudent(bodyfat.model))
 
+# Close the device
+dev.off()
 
-```{r}
-# Partial residual plots
-avPlots(bodyfat.model)
 ```
 
+```{r}
+res <- resid(bodyfat.model)
+plot(fitted(bodyfat.model), res)
+abline(0,0)
+```
 
 ```{r}
-# Studentized residuals
-par(mfrow = c(1, 2))
-plot(studres(bodyfat.model), main="Studentized Residuals")
-plot(rstudent(bodyfat.model), main="R-Student Residuals")
+qqnorm(rstudent(bodyfat.model))
+qqline(rstudent(bodyfat.model))
+```
 
-# (b) Data Transformation
+```{r Partial regression plots}
+# Load necessary library
+library(car)
+
+# Create a directory to store plots
+dir.create("partial_regression_Plots", showWarnings = FALSE)
+
+# Manually specify all regressors
+predictors <- c("age", "weight", "height", "neck", "chest", "abdomen", 
+                "hip", "thigh", "knee", "ankle", "biceps", "forearm", "wrist")
+
+# Save each partial regression plot as a PNG
+for (var in predictors) {
+  png_filename <- paste0("partial_regression_Plots/", var, "_partial_regression.png")
+  png(png_filename, width = 800, height = 600)  # Open PNG device
+  
+  # Check if variable exists in the model before plotting
+  if (var %in% names(coef(bodyfat.model))) {
+    avPlots(bodyfat.model, terms = var)  # Generate partial regression plot for the variable
+  } else {
+    plot.new()
+    text(0.5, 0.5, paste("Variable", var, "not in model"), cex = 1.5)
+  }
+  
+  dev.off()  # Close PNG device
+}
+
+# Message to confirm
+cat("partial regression plots saved in the 'partial_regression_Plots' folder.\n")
+
+```
+
+```{r Partial residual plots}
+# Load necessary library
+library(car)
+
+# Create a directory to store plots
+dir.create("Partial_Residual_Plots", showWarnings = FALSE)
+
+# Manually specify all regressors
+predictors <- c("age", "weight", "height", "neck", "chest", "abdomen", 
+                "hip", "thigh", "knee", "ankle", "biceps", "forearm", "wrist")
+
+# Save each partial residual plot as a PNG
+for (var in predictors) {
+  png_filename <- paste0("Partial_Residual_Plots/", var, "_Partial_Residual.png")
+  png(png_filename, width = 800, height = 600)  # Open PNG device
+  
+  # Check if variable exists in the model before plotting
+  if (var %in% names(coef(bodyfat.model))) {
+    crPlots(bodyfat.model, terms = var)  # Generate partial residual plot for the variable
+  } else {
+    plot.new()
+    text(0.5, 0.5, paste("Variable", var, "not in model"), cex = 1.5)
+  }
+  
+  dev.off()  # Close PNG device
+}
+
+# Message to confirm
+cat("Partial residual plots saved in the 'Partial_Residual_Plots' folder.\n")
+
+```
+
+```{r Partial residual plots with outliers}
+# Load necessary library
+library(car)
+
+# Create a new directory for plots
+dir.create("Partial_Residual_Plot_Outlier", showWarnings = FALSE)
+
+# Manually specify all regressors
+predictors <- c("age", "weight", "height", "neck", "chest", "abdomen", 
+                "hip", "thigh", "knee", "ankle", "biceps", "forearm", "wrist")
+
+# Compute studentized residuals for outlier detection
+rstudent_residuals <- rstudent(bodyfat.model)
+threshold <- 2  # Define threshold for outliers (absolute residual > 2)
+
+# Save each partial residual plot in the new directory
+for (var in predictors) {
+  png_filename <- paste0("Partial_Residual_Plot_Outlier/", var, "_Partial_Residual.png")
+  png(png_filename, width = 800, height = 600)  # Open PNG device
+  
+  # Check if variable exists in the model before plotting
+  if (var %in% names(coef(bodyfat.model))) {
+    # Compute partial residuals
+    crPlot_data <- residuals(bodyfat.model) + coef(bodyfat.model)[var] * bodyfatmen[[var]]
+
+    # Identify outliers (absolute studentized residual > threshold)
+    outlier_indices <- which(abs(rstudent_residuals) > threshold)
+    
+    # Generate Partial Residual Plot
+    plot(bodyfatmen[[var]], crPlot_data, 
+         main = paste("Partial Residual Plot:", var), 
+         xlab = var, 
+         ylab = "Partial Residuals", 
+         pch = 19, col = "blue")
+
+    # Add a lowess smooth line to visualize the trend
+    lines(lowess(bodyfatmen[[var]], crPlot_data), col = "red", lwd = 2)
+
+    # Highlight outliers in red
+    points(bodyfatmen[[var]][outlier_indices], crPlot_data[outlier_indices], 
+           col = "red", pch = 19, cex = 1.2)
+
+    # Add text labels for outliers
+    text(bodyfatmen[[var]][outlier_indices], crPlot_data[outlier_indices], 
+         labels = outlier_indices, pos = 3, cex = 0.7, col = "black")
+    
+  } else {
+    plot.new()
+    text(0.5, 0.5, paste("Variable", var, "not in model"), cex = 1.5)
+  }
+  
+  dev.off()  # Close PNG device
+}
+
+# Message to confirm
+cat("Partial residual plots with outliers saved in 'Partial_Residual_Plot_Outlier' folder.\n")
+
+```
+
+```{r}
+cooks_distance <- cooks.distance(bodyfat.model)  # Cook’s Distance
+# 2. Cook’s Distance Plot
+# Set up plots directory
+if (!dir.exists("diagnostics_plots")) {
+  dir.create("diagnostics_plots")
+}
+png("diagnostics_plots/cooks_distance.png", width=800, height=600)
+plot(cooks_distance, type = "h", col = "blue",
+     xlab = "Observation Index", ylab = "Cook's Distance",
+     main = "Cook's Distance Plot")
+abline(h = 1, col = "red", lty = 2)
+
+png("diagnostics_plots/cooks_distance_outlier.png", width=800, height=600)
+plot(bodyfat.model, which=4, main="Cook's Distance")
+dev.copy(png, "bodyfatmen_cooks_distance.png")
+
+dev.off()
+```
+
+
+```{r}
+# ============================
+# 1. LOAD LIBRARIES AND DATA
+# ============================
+
+# Load necessary libraries
+library(car)       # For VIF, diagnostic plots, etc.
+library(MASS)      # For stepAIC and Box–Cox transformations
+library(leaps)     # For all subsets regression (regsubsets)
+library(boot)      # For cross-validation and bootstrapping
+library(ggplot2)   # For plotting
+library(reshape2)  # For reshaping correlation matrices for heatmaps
+
+# Load your data (update the file path as needed)
+bodyfatmen <- read.csv("bodyfatmen.csv", header = TRUE)
+
+# ============================
+# 2. MULTICOLLINEARITY DIAGNOSTICS
+# ============================
+
+# Fit the full model using all predictors
+full_model <- lm(density ~ age + weight + height + neck + chest + abdomen +
+                   hip + thigh + knee + ankle + biceps + forearm + wrist,
+                 data = bodyfatmen)
+
+# (a) Correlation Matrix of Predictors (excluding the response)
+predictors <- bodyfatmen[, setdiff(names(bodyfatmen), "density")]
+cor_matrix <- cor(predictors)
+print("Correlation matrix of predictors:")
+print(cor_matrix)
+
+# Plot a heatmap of the correlation matrix
+melted_cor <- melt(cor_matrix)
+ggplot(data = melted_cor, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Correlation Matrix Heatmap")
+
+# (b) Variance Inflation Factors (VIF)
+vif_values <- vif(full_model)
+print("Variance Inflation Factors (VIF):")
+print(vif_values)
+
+# (c) Eigenvalues and Condition Number for XtX
+X <- model.matrix(full_model)
+XtX <- t(X) %*% X
+eigen_vals <- eigen(XtX)$values
+condition_number <- max(eigen_vals) / min(eigen_vals)
+print("Eigenvalues of XtX:")
+print(eigen_vals)
+print(paste("Condition Number:", round(condition_number, 2)))
+# Note: A condition number > 100 may indicate potential multicollinearity.
+
+# ============================
+# 3. VARIABLE SELECTION METHODS
+# ============================
+
+# (a) All Possible Regressions using 'regsubsets'
+all_subsets <- regsubsets(density ~ age + weight + height + neck + chest +
+                            abdomen + hip + thigh + knee + ankle + biceps +
+                            forearm + wrist, data = bodyfatmen, nvmax = 13)
+all_subsets_summary <- summary(all_subsets)
+print("All subsets regression summary:")
+print(all_subsets_summary)
+# Inspect criteria such as Adjusted R^2, Mallows’ Cp, and BIC from the summary
+# e.g., all_subsets_summary$adjr2, all_subsets_summary$cp, all_subsets_summary$bic
+
+# (b) Forward/Backward Elimination using stepAIC
+step_model <- stepAIC(full_model, direction = "both", trace = FALSE)
+print("Stepwise Selection Model Summary:")
+summary(step_model)
+
+# ============================
+# 4. CROSS-VALIDATION FOR MODEL EVALUATION
+# ============================
+
+# Partition the data into a training set (70%) and a test set (30%)
+set.seed(123)
+n <- nrow(bodyfatmen)
+train_indices <- sample(1:n, size = floor(0.7 * n))
+train_data <- bodyfatmen[train_indices, ]
+test_data <- bodyfatmen[-train_indices, ]
+
+# Suppose variable selection (and diagnostics) led to the following final model:
+final_model <- lm(density ~ weight + height + abdomen + I(abdomen^2) + wrist,
+                  data = train_data)
+print("Final Model Summary:")
+summary(final_model)
+
+# (a) Predict on the Test Set and Calculate Test MSE
+predictions <- predict(final_model, newdata = test_data)
+test_MSE <- mean((test_data$density - predictions)^2)
+print(paste("Test Set MSE:", round(test_MSE, 4)))
+
+# (b) Calculate Adjusted R^2 on the Test Set (manual calculation)
+SSE <- sum((test_data$density - predictions)^2)
+SST <- sum((test_data$density - mean(train_data$density))^2)
+R2 <- 1 - SSE / SST
+n_test <- nrow(test_data)
+p_final <- length(coef(final_model)) - 1  # Number of predictors
+adj_R2 <- 1 - ((1 - R2) * (n_test - 1) / (n_test - p_final - 1))
+print(paste("Test Set Adjusted R^2:", round(adj_R2, 4)))
+
+# (c) Alternatively, perform 10-fold cross-validation using cv.glm
+cv_results <- cv.glm(data = bodyfatmen, glmfit = final_model, K = 10)
+print("10-fold Cross-Validation MSE (cv.glm):")
+print(cv_results$delta[1])  # The first value is the raw cross-validation estimate
+
+# ============================
+# 5. BOOTSTRAP PROCEDURES FOR MODEL ASSESSMENT
+# ============================
+
+# (a) Bootstrap to Generate Confidence Intervals for Regression Coefficients
+# using the percentile method (based on bootstrapped residuals)
+
+set.seed(123)
+n_boot <- 1000  # Number of bootstrap samples
+boot_coefs <- matrix(NA, n_boot, length(coef(final_model)))
+colnames(boot_coefs) <- names(coef(final_model))
+
+# Bootstrap loop: resample residuals and refit the model
+for (i in 1:n_boot) {
+  # Resample residuals with replacement from the final model
+  boot_residuals <- sample(resid(final_model), replace = TRUE)
+  # Generate new response: fitted values + resampled residuals
+  boot_y <- fitted(final_model) + boot_residuals
+  # Refit the final model using the bootstrapped response
+  boot_model <- lm(boot_y ~ weight + height + abdomen + I(abdomen^2) + wrist,
+                   data = train_data)
+  boot_coefs[i, ] <- coef(boot_model)
+}
+
+# Calculate 95% bootstrap confidence intervals (percentile method)
+boot_ci <- apply(boot_coefs, 2, quantile, probs = c(0.025, 0.975))
+print("Bootstrap-based 95% Confidence Intervals for Regression Coefficients:")
+print(boot_ci)
+
+# ============================
+# 6. FINAL MODEL SPECIFICATION
+# ============================
+# Our final selected model is:
+#   density ~ weight + height + abdomen + I(abdomen^2) + wrist
+#
+# This model was chosen based on diagnostics (e.g., residual analysis, VIFs),
+# variable selection (using all-subsets and stepwise elimination), and cross-validation
+# which indicated favorable predictive performance (i.e., low MSE and high adjusted R^2).
+
+print("Final Model Specification:")
+print(summary(final_model))
+
+```
+
+
+```{r Outlier}
+# Exercise session 4, exercise 6
+
+bodyfatmen <- read.csv("bodyfatmen.csv", comment.char="#")
 par(mfrow = c(1, 1))
-boxcox(bodyfat.model)   # Box-Cox transformation suggestion
 
-# Try polynomial term if a variable shows curvature
-bodyfat.model2 <- lm(density ~ weight + height + abdomen + I(abdomen^2) + wrist, data=bodyfatmen)
-summary(bodyfat.model2)
 
-# Residual plots for the new model
-par(mfrow = c(2, 2))
-plot(bodyfat.model2)
+n <- nrow(bodyfatmen)
+p <- ncol(bodyfatmen)
+cooks.cutoff <- qf(0.5, p, n - p, lower.tail = FALSE) # MPV p. 215
 
-# Partial residual plots for the improved model
+# Log transformation
+bodyfatmen$density <- log(bodyfatmen$density)
+bodyfatmen$age <- log(bodyfatmen$age)
+bodyfatmen$weight <- log(bodyfatmen$weight)
+bodyfatmen$height <- log(bodyfatmen$height)
+bodyfatmen$neck <- log(bodyfatmen$neck)
+bodyfatmen$chest <- log(bodyfatmen$chest)
+bodyfatmen$abdomen <- log(bodyfatmen$abdomen)
+bodyfatmen$hip <- log(bodyfatmen$hip)
+bodyfatmen$thigh <- log(bodyfatmen$thigh)
+bodyfatmen$knee <- log(bodyfatmen$knee)
+bodyfatmen$ankle <- log(bodyfatmen$ankle)
+bodyfatmen$biceps <- log(bodyfatmen$biceps)
+bodyfatmen$forearm <- log(bodyfatmen$forearm)
+bodyfatmen$wrist <- log(bodyfatmen$wrist)
+
+# Simple linear model
+bodyfat.model <- lm(density ~ age + weight  + neck + abdomen + hip + thigh + knee +  forearm + wrist, data=bodyfatmen)
+summary(bodyfat.model)
 par(mfrow = c(1, 1))
-avPlots(bodyfat.model2)
+plot(bodyfat.model)
+dev.copy(png, "bodyfatmen_lm.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(bodyfat.model, which=1, main="Residuals vs Fitted")
+dev.copy(png, "bodyfatmen_residuals_vs_fitted.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(bodyfat.model, which=2, main="Normal Q-Q Plot")
+dev.copy(png, "bodyfatmen_normal_qq_plot.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(bodyfat.model, which=3, main="Scale-Location Plot")
+dev.copy(png, "bodyfatmen_scale_location.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(bodyfat.model, which=4, main="Cook's Distance")
+dev.copy(png, "bodyfatmen_cooks_distance.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(bodyfat.model, which=5, main="Residuals vs Leverage")
+dev.copy(png, "bodyfatmen_residuals_vs_leverage.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(cooks.distance(bodyfat.model), main="Cook's Distance")
+dev.copy(png, "bodyfatmen_cooks_distance.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(hatvalues(bodyfat.model), main="Leverage Values")
+dev.copy(png, "bodyfatmen_leverage_values.png")
+dev.off()
+
+par(mfrow = c(1, 1))
+plot(covratio(bodyfat.model), main="CovRatio")
+dev.copy(png, "bodyfatmen_covratio.png")
+dev.off()
+
+dev.off()
+
+```
+```{r}
+
+par(mfrow = c(1, 1))
+plot(bodyfat.model, which=4, main="Cook's Distance")
+dev.copy(png, "bodyfatmen_cooks_distance.png")
+dev.off()
 
 ```
 
+```{r Multicollinearity}
+# Load necessary libraries
+# install.packages("GGally")
+
+library(car)    # For VIF
+library(GGally) # For ggpairs
+
+# Fit linear model
+bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data = bodyfatmen)
+
+
+# (a) Correlation matrix to detect multicollinearity
+X <- model.matrix(bodyfat.model)
+XtX <- cor(X[,-1])  # Compute correlation matrix of predictors
+
+# Check for strong correlations
+print(XtX)
+
+# Visualizing correlations between selected variables
+ggpairs(data = bodyfatmen[, c("age", "abdomen", "hip")])  # Change variables as needed
+
+# (b) Variance Inflation Factor (VIF)
+vif_values <- vif(bodyfat.model)  # Compute VIF
+print(vif_values)  # VIF > 10 indicates multicollinearity
+
+# Compute inverse of XtX
+XtX_inv <- solve(XtX)
+print(XtX_inv)  # Compare diagonal values with VIFs
+
+# Condition number to check for multicollinearity
+bodyfat.eigen <- eigen(XtX)
+condition_number <- max(bodyfat.eigen$values) / min(bodyfat.eigen$values)
+print(condition_number)  # Condition number > 100 suggests multicollinearity
+
+```
+```{r Correlation matrix heatmap}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)  # For reshaping data
+
+# Compute correlation matrix
+XtX <- cor(X[,-1])
+
+# Convert to long format for ggplot
+XtX_melted <- melt(XtX)
+
+# Plot heatmap with color gradient
+ggplot(data = XtX_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Correlation Matrix Heatmap", fill = "Correlation")
+
+```
+```{r VIF and Eigenvalue}
+# Load necessary library
+library(ggplot2)
+
+# Compute Variance Inflation Factors
+vif_values <- vif(bodyfat.model)
+
+# Convert to data frame for ggplot
+vif_df <- data.frame(Variable = names(vif_values), VIF = vif_values)
+
+# Plot VIF values
+ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF, fill = VIF)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient(low = "green", high = "red") +
+  theme_minimal() +
+  coord_flip() +  # Flip axes for better readability
+  labs(title = "Variance Inflation Factor (VIF) for Predictors",
+       x = "Predictor Variables",
+       y = "VIF Value",
+       fill = "VIF")
+
+# Compute eigenvalues of XtX (correlation matrix)
+bodyfat.eigen <- eigen(XtX)
+
+# Convert to data frame
+eigen_df <- data.frame(Eigenvalue = bodyfat.eigen$values,
+                       Index = seq_along(bodyfat.eigen$values))
+
+# Compute condition number
+condition_number <- max(eigen_df$Eigenvalue) / min(eigen_df$Eigenvalue)
+
+# Plot eigenvalues
+ggplot(eigen_df, aes(x = Index, y = Eigenvalue, fill = Eigenvalue)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient(low = "blue", high = "orange") +
+  theme_minimal() +
+  labs(title = paste("Eigenvalues of XtX (Condition Number =", round(condition_number, 2), ")"),
+       x = "Index",
+       y = "Eigenvalue",
+       fill = "Eigenvalue")
+
+
+```
 
 
 ```{r Summary Statistics Latex code}
@@ -115,14 +718,16 @@ cor(bodyfatmen)
 pairs(bodyfatmen)
 
 ```
-```{r}
+
+```{r Snabbanalys: Standardplottar}
 full_model <- lm(density ~ ., data = bodyfatmen)
 summary(full_model)
-par(mfrow = c(2, 2))  # Arrange diagnostic plots in a 2x2 grid
+par(mfrow = c(1, 1))  # Arrange diagnostic plots in a 2x2 grid
 plot(full_model)
 
 
 ```
+
 ```{r}
 library(MASS)
 stepwise_model <- stepAIC(full_model, direction = "both")
@@ -153,4 +758,3 @@ cv_error <- cv.glm(bodyfatmen, full_model, K = 10)
 cv_error$delta
 
 ```
-
