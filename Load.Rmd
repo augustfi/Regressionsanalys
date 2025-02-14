@@ -1,15 +1,14 @@
 ```{r Load in data}
-# bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
-# bodyfatmen <- read.csv("/home/a/u/augustfi/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
-bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
-# Kontrollera att filen laddats korrekt
+
+bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Regressionsanalys/bodyfatmen.csv", header = TRUE)
+
+
 # str(bodyfatmen)
 # head(bodyfatmen)
 ```
 
 ```{r Libraries}
-# Load necessary libraries
-#update.packages(ask=FALSE)
+
 #install.packages("car")
 
 library(car)   # For avPlots
@@ -18,75 +17,47 @@ library(MPV)   # If needed
 ```
 
 ```{r Build model}
-# Define dependent and independent variables
-# Assuming body fat percentage (density) is the response variable,
-# and using weight, height, abdomen, and wrist as predictors.
 bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data=bodyfatmen)
 ```
 
-```{r}
-# Load necessary libraries
-library(car)    # For multicollinearity diagnostics
-library(leaps)  # For best subset selection
-library(glmnet) # For Ridge and Lasso
-library(boot)   # For cross-validation
-library(MASS)   # For stepwise selection
-
-# Load the dataset
-bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Skola/Regressionsanalys/Projects/Project-1-SF2930/bodyfatmen.csv", header = TRUE)
-
-# Remove missing values
-bodyfatmen <- na.omit(bodyfatmen)
-
-# Define dependent and independent variables
-y <- bodyfatmen$density
-X <- bodyfatmen[, !(names(bodyfatmen) %in% c("density"))]
-# Compute Variance Inflation Factor (VIF)
-vif_results <- vif(lm(y ~ ., data=bodyfatmen))
-print(vif_results)
-# Perform best subset selection
-best_subset <- regsubsets(density ~ ., data=bodyfatmen, nvmax=ncol(X))
-
-# Get summary of best models
-best_summary <- summary(best_subset)
-
-# Display model selection criteria
-best_models <- data.frame(
-  Num_Variables = 1:length(best_summary$rsq),
-  Adjusted_R2 = best_summary$adjr2,
-  Cp = best_summary$cp,
-  BIC = best_summary$bic
-)
-
-print(best_models)
-
-
-```
-
-```{r Coding}
+```{r Coding Histogram}
 model_residuals =bodyfat.model$residuals
 hist(model_residuals)
 ```
 
-```{r Coding}
+```{r Coding QQ-plot}
 qqnorm(rstudent(bodyfat.model))
 qqline(rstudent(bodyfat.model))
 ```
 
-```{r Coding}
+```{r Coding res v fit}
+res <- resid(bodyfat.model)
+plot(fitted(bodyfat.model), res)
+abline(0,0)
+```
+
+```{r Coding res v leverage and cooks distance}
 #outlier detection using ols
 
 #install.packages("olsrr")
+#if you havent installed olsrr, remove commenting above to install.packages("olsrr")
 library(olsrr)
 
 #plot leverage and outliers
 ols_plot_resid_lev(bodyfat.model)
 
 #plot Cook's distance
-#ols_plot_cooksd_chart(bodyfat.model)
+ols_plot_cooksd_chart(bodyfat.model)
 
 ```
-```{r}
+
+
+
+
+
+
+
+```{r R^2 Coefficient of Determination}
 # Get the summary of the model
 model_summary <- summary(model)
 
@@ -99,7 +70,7 @@ print(paste("R-squared:", r_squared))
 print(paste("Adjusted R-squared:", adj_r_squared))
 ```
 
-```{r}
+```{r An example of a Transformation, albeit we say we don't need transform}
 library(MASS)
 bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen +
                       hip + thigh + knee + ankle + biceps + forearm + wrist,
@@ -193,17 +164,6 @@ qqline(rstudent(bodyfat.model))
 # Close the device
 dev.off()
 
-```
-
-```{r}
-res <- resid(bodyfat.model)
-plot(fitted(bodyfat.model), res)
-abline(0,0)
-```
-
-```{r}
-qqnorm(rstudent(bodyfat.model))
-qqline(rstudent(bodyfat.model))
 ```
 
 ```{r Partial regression plots}
@@ -329,28 +289,152 @@ cat("Partial residual plots with outliers saved in 'Partial_Residual_Plot_Outlie
 
 ```
 
-```{r}
-cooks_distance <- cooks.distance(bodyfat.model)  # Cook’s Distance
-# 2. Cook’s Distance Plot
-# Set up plots directory
-if (!dir.exists("diagnostics_plots")) {
-  dir.create("diagnostics_plots")
-}
-png("diagnostics_plots/cooks_distance.png", width=800, height=600)
-plot(cooks_distance, type = "h", col = "blue",
-     xlab = "Observation Index", ylab = "Cook's Distance",
-     main = "Cook's Distance Plot")
-abline(h = 1, col = "red", lty = 2)
 
-png("diagnostics_plots/cooks_distance_outlier.png", width=800, height=600)
-plot(bodyfat.model, which=4, main="Cook's Distance")
-dev.copy(png, "bodyfatmen_cooks_distance.png")
 
-dev.off()
+
+
+
+
+
+```{r Multicollinearity}
+# Load necessary libraries
+# install.packages("GGally")
+
+library(car)    # For VIF
+library(GGally) # For ggpairs
+
+# Fit linear model
+bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data = bodyfatmen)
+
+
+# (a) Correlation matrix to detect multicollinearity
+X <- model.matrix(bodyfat.model)
+XtX <- cor(X[,-1])  # Compute correlation matrix of predictors
+
+# Check for strong correlations
+print(XtX)
+
+# Visualizing correlations between selected variables
+ggpairs(data = bodyfatmen[, c("age", "abdomen", "hip")])  # Change variables as needed
+
+# (b) Variance Inflation Factor (VIF)
+vif_values <- vif(bodyfat.model)  # Compute VIF
+print(vif_values)  # VIF > 10 indicates multicollinearity
+
+# Compute inverse of XtX
+XtX_inv <- solve(XtX)
+print(XtX_inv)  # Compare diagonal values with VIFs
+
+# Condition number to check for multicollinearity
+bodyfat.eigen <- eigen(XtX)
+condition_number <- max(bodyfat.eigen$values) / min(bodyfat.eigen$values)
+print(condition_number)  # Condition number > 100 suggests multicollinearity
+
+```
+```{r Correlation matrix heatmap}
+# Load necessary libraries
+library(ggplot2)
+library(reshape2)  # For reshaping data
+
+# Compute correlation matrix
+XtX <- cor(X[,-1])
+
+# Convert to long format for ggplot
+XtX_melted <- melt(XtX)
+
+# Plot heatmap with color gradient
+ggplot(data = XtX_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Correlation Matrix Heatmap", fill = "Correlation")
+
+```
+```{r VIF and Eigenvalue}
+# Load necessary library
+library(ggplot2)
+
+# Compute Variance Inflation Factors
+vif_values <- vif(bodyfat.model)
+
+# Convert to data frame for ggplot
+vif_df <- data.frame(Variable = names(vif_values), VIF = vif_values)
+
+# Plot VIF values
+ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF, fill = VIF)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient(low = "green", high = "red") +
+  theme_minimal() +
+  coord_flip() +  # Flip axes for better readability
+  labs(title = "Variance Inflation Factor (VIF) for Predictors",
+       x = "Predictor Variables",
+       y = "VIF Value",
+       fill = "VIF")
+
+# Compute eigenvalues of XtX (correlation matrix)
+bodyfat.eigen <- eigen(XtX)
+
+# Convert to data frame
+eigen_df <- data.frame(Eigenvalue = bodyfat.eigen$values,
+                       Index = seq_along(bodyfat.eigen$values))
+
+# Compute condition number
+condition_number <- max(eigen_df$Eigenvalue) / min(eigen_df$Eigenvalue)
+
+# Plot eigenvalues
+ggplot(eigen_df, aes(x = Index, y = Eigenvalue, fill = Eigenvalue)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient(low = "blue", high = "orange") +
+  theme_minimal() +
+  labs(title = paste("Eigenvalues of XtX (Condition Number =", round(condition_number, 2), ")"),
+       x = "Index",
+       y = "Eigenvalue",
+       fill = "Eigenvalue")
+
+
 ```
 
 
-```{r}
+```{r Best Subset Regression for Density Prediction}
+# Load necessary libraries
+library(car)    # For multicollinearity diagnostics
+library(leaps)  # For best subset selection
+library(glmnet) # For Ridge and Lasso
+library(boot)   # For cross-validation
+library(MASS)   # For stepwise selection
+
+# Define dependent and independent variables
+y <- bodyfatmen$density
+X <- bodyfatmen[, !(names(bodyfatmen) %in% c("density"))]
+
+# Compute Variance Inflation Factor (VIF)
+vif_results <- vif(lm(y ~ ., data=bodyfatmen))
+print(vif_results)
+
+# Perform best subset selection
+best_subset <- regsubsets(density ~ ., data=bodyfatmen, nvmax=ncol(X))
+
+# Get summary of best models
+best_summary <- summary(best_subset)
+
+# Display model selection criteria
+best_models <- data.frame(
+  Num_Variables = 1:length(best_summary$rsq),
+  Adjusted_R2 = best_summary$adjr2,
+  Cp = best_summary$cp,
+  BIC = best_summary$bic
+)
+
+print(best_models)
+
+
+```
+
+
+
+
+```{r Some help}
 # ============================
 # 1. LOAD LIBRARIES AND DATA
 # ============================
@@ -503,196 +587,14 @@ print("Final Model Specification:")
 print(summary(final_model))
 
 ```
-
-
-```{r Outlier}
-# Exercise session 4, exercise 6
-
-bodyfatmen <- read.csv("bodyfatmen.csv", comment.char="#")
-par(mfrow = c(1, 1))
-
-
-n <- nrow(bodyfatmen)
-p <- ncol(bodyfatmen)
-cooks.cutoff <- qf(0.5, p, n - p, lower.tail = FALSE) # MPV p. 215
-
-# Log transformation
-bodyfatmen$density <- log(bodyfatmen$density)
-bodyfatmen$age <- log(bodyfatmen$age)
-bodyfatmen$weight <- log(bodyfatmen$weight)
-bodyfatmen$height <- log(bodyfatmen$height)
-bodyfatmen$neck <- log(bodyfatmen$neck)
-bodyfatmen$chest <- log(bodyfatmen$chest)
-bodyfatmen$abdomen <- log(bodyfatmen$abdomen)
-bodyfatmen$hip <- log(bodyfatmen$hip)
-bodyfatmen$thigh <- log(bodyfatmen$thigh)
-bodyfatmen$knee <- log(bodyfatmen$knee)
-bodyfatmen$ankle <- log(bodyfatmen$ankle)
-bodyfatmen$biceps <- log(bodyfatmen$biceps)
-bodyfatmen$forearm <- log(bodyfatmen$forearm)
-bodyfatmen$wrist <- log(bodyfatmen$wrist)
-
-# Simple linear model
-bodyfat.model <- lm(density ~ age + weight  + neck + abdomen + hip + thigh + knee +  forearm + wrist, data=bodyfatmen)
-summary(bodyfat.model)
-par(mfrow = c(1, 1))
-plot(bodyfat.model)
-dev.copy(png, "bodyfatmen_lm.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(bodyfat.model, which=1, main="Residuals vs Fitted")
-dev.copy(png, "bodyfatmen_residuals_vs_fitted.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(bodyfat.model, which=2, main="Normal Q-Q Plot")
-dev.copy(png, "bodyfatmen_normal_qq_plot.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(bodyfat.model, which=3, main="Scale-Location Plot")
-dev.copy(png, "bodyfatmen_scale_location.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(bodyfat.model, which=4, main="Cook's Distance")
-dev.copy(png, "bodyfatmen_cooks_distance.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(bodyfat.model, which=5, main="Residuals vs Leverage")
-dev.copy(png, "bodyfatmen_residuals_vs_leverage.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(cooks.distance(bodyfat.model), main="Cook's Distance")
-dev.copy(png, "bodyfatmen_cooks_distance.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(hatvalues(bodyfat.model), main="Leverage Values")
-dev.copy(png, "bodyfatmen_leverage_values.png")
-dev.off()
-
-par(mfrow = c(1, 1))
-plot(covratio(bodyfat.model), main="CovRatio")
-dev.copy(png, "bodyfatmen_covratio.png")
-dev.off()
-
-dev.off()
+```{r Quick overview analysis}
+full_model <- lm(density ~ ., data = bodyfatmen)
+summary(full_model)
+par(mfrow = c(1, 1))  # Arrange diagnostic plots in a 2x2 grid
+plot(full_model)
 
 ```
-```{r}
-
-par(mfrow = c(1, 1))
-plot(bodyfat.model, which=4, main="Cook's Distance")
-dev.copy(png, "bodyfatmen_cooks_distance.png")
-dev.off()
-
-```
-
-```{r Multicollinearity}
-# Load necessary libraries
-# install.packages("GGally")
-
-library(car)    # For VIF
-library(GGally) # For ggpairs
-
-# Fit linear model
-bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data = bodyfatmen)
-
-
-# (a) Correlation matrix to detect multicollinearity
-X <- model.matrix(bodyfat.model)
-XtX <- cor(X[,-1])  # Compute correlation matrix of predictors
-
-# Check for strong correlations
-print(XtX)
-
-# Visualizing correlations between selected variables
-ggpairs(data = bodyfatmen[, c("age", "abdomen", "hip")])  # Change variables as needed
-
-# (b) Variance Inflation Factor (VIF)
-vif_values <- vif(bodyfat.model)  # Compute VIF
-print(vif_values)  # VIF > 10 indicates multicollinearity
-
-# Compute inverse of XtX
-XtX_inv <- solve(XtX)
-print(XtX_inv)  # Compare diagonal values with VIFs
-
-# Condition number to check for multicollinearity
-bodyfat.eigen <- eigen(XtX)
-condition_number <- max(bodyfat.eigen$values) / min(bodyfat.eigen$values)
-print(condition_number)  # Condition number > 100 suggests multicollinearity
-
-```
-```{r Correlation matrix heatmap}
-# Load necessary libraries
-library(ggplot2)
-library(reshape2)  # For reshaping data
-
-# Compute correlation matrix
-XtX <- cor(X[,-1])
-
-# Convert to long format for ggplot
-XtX_melted <- melt(XtX)
-
-# Plot heatmap with color gradient
-ggplot(data = XtX_melted, aes(x = Var1, y = Var2, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "Correlation Matrix Heatmap", fill = "Correlation")
-
-```
-```{r VIF and Eigenvalue}
-# Load necessary library
-library(ggplot2)
-
-# Compute Variance Inflation Factors
-vif_values <- vif(bodyfat.model)
-
-# Convert to data frame for ggplot
-vif_df <- data.frame(Variable = names(vif_values), VIF = vif_values)
-
-# Plot VIF values
-ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF, fill = VIF)) +
-  geom_bar(stat = "identity") +
-  scale_fill_gradient(low = "green", high = "red") +
-  theme_minimal() +
-  coord_flip() +  # Flip axes for better readability
-  labs(title = "Variance Inflation Factor (VIF) for Predictors",
-       x = "Predictor Variables",
-       y = "VIF Value",
-       fill = "VIF")
-
-# Compute eigenvalues of XtX (correlation matrix)
-bodyfat.eigen <- eigen(XtX)
-
-# Convert to data frame
-eigen_df <- data.frame(Eigenvalue = bodyfat.eigen$values,
-                       Index = seq_along(bodyfat.eigen$values))
-
-# Compute condition number
-condition_number <- max(eigen_df$Eigenvalue) / min(eigen_df$Eigenvalue)
-
-# Plot eigenvalues
-ggplot(eigen_df, aes(x = Index, y = Eigenvalue, fill = Eigenvalue)) +
-  geom_bar(stat = "identity") +
-  scale_fill_gradient(low = "blue", high = "orange") +
-  theme_minimal() +
-  labs(title = paste("Eigenvalues of XtX (Condition Number =", round(condition_number, 2), ")"),
-       x = "Index",
-       y = "Eigenvalue",
-       fill = "Eigenvalue")
-
-
-```
-
-
-```{r Summary Statistics Latex code}
+```{r Summary Statistics, makes into Latex code}
 # Install and load xtable
 install.packages("xtable")  # Install if not already installed
 library(xtable)
@@ -708,51 +610,20 @@ print(latex_table, type = "latex")
 
 
 ```
-
-```{r}
+```{r Other}
 cor(bodyfatmen)
-
-```
-
-```{r}
 pairs(bodyfatmen)
-
-```
-
-```{r Snabbanalys: Standardplottar}
-full_model <- lm(density ~ ., data = bodyfatmen)
-summary(full_model)
-par(mfrow = c(1, 1))  # Arrange diagnostic plots in a 2x2 grid
-plot(full_model)
-
-
-```
-
-```{r}
 library(MASS)
 stepwise_model <- stepAIC(full_model, direction = "both")
 summary(stepwise_model)
-
-```
-
-```{r}
-
 library(leaps)
 best_subset <- regsubsets(density ~ ., data = bodyfatmen, nbest = 5)
 summary(best_subset)
-
-```
-
-```{r}
 # Create a new data point
 new_data <- data.frame(age = 25, weight = 175, height = 70, neck = 36, chest = 95, abdomen = 90, hip = 100, thigh = 60, knee= 100, ankle = 100, biceps= 100, forearm= 100, wrist=100)
 
 # Predict with confidence intervals
 predict(full_model, newdata = new_data, interval = "confidence")
-
-```
-
-```{r}
 library(boot)
 cv_error <- cv.glm(bodyfatmen, full_model, K = 10)
 cv_error$delta
