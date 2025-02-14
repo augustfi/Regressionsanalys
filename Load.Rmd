@@ -57,6 +57,11 @@ ols_plot_cooksd_chart(bodyfat.model)
 
 
 
+
+
+
+
+
 ```{r R^2 Coefficient of Determination}
 # Get the summary of the model
 model_summary <- summary(model)
@@ -296,6 +301,11 @@ cat("Partial residual plots with outliers saved in 'Partial_Residual_Plot_Outlie
 
 
 
+
+
+
+
+
 ```{r Multicollinearity}
 # Load necessary libraries
 # install.packages("GGally")
@@ -430,8 +440,6 @@ print(best_models)
 
 
 ```
-
-
 
 
 ```{r Some help}
