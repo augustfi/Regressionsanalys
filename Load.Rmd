@@ -338,11 +338,6 @@ ggplot(data = melted_bodyfatmen, aes(x=Var1, y=Var2, fill=value)) +
 if (!require(leaps)) install.packages("leaps")
 library(leaps)
 
-# Fit all possible subsets models
-bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen +
-                    hip + thigh + knee + ankle + biceps + forearm + wrist,
-                    data = bodyfatmen)
-
 # Use regsubsets to search through all models (nvmax = 13 since we have 13 predictors)
 all.subsets <- regsubsets(density ~ age + weight + height + neck + chest + abdomen +
                           hip + thigh + knee + ankle + biceps + forearm + wrist,
@@ -363,11 +358,33 @@ print(names(all.subsets.summary))
 best.adjr2  <- which.max(all.subsets.summary$adjr2)
 best.cp     <- which.min(all.subsets.summary$cp)
 best.bic    <- which.min(all.subsets.summary$bic)
+# Now, compute AIC for each model.
+# For a linear model, AIC can be approximated as:
+#    AIC = n * log(RSS/n) + 2K
+# where n = number of observations, RSS = residual sum of squares, and K = number of parameters (predictors + intercept).
 
-cat("Best model by adjusted R^2 has", best.adjr2, "predictors\n")
-cat("Best model by Mallows' Cp has", best.cp, "predictors\n")
-cat("Best model by BIC has", best.bic, "predictors\n")
+n <- nrow(bodyfatmen)  # number of observations
 
+# Extract RSS from the summary
+rss <- all.subsets.summary$rss
+
+# Determine the number of predictors included in each model.
+# all.subsets.summary$which is a logical matrix where rows correspond to models.
+# The first column is for the intercept (which is always TRUE). We subtract 1 to count only the predictors.
+num_pred <- apply(all.subsets.summary$which, 1, sum) - 1  
+K <- num_pred + 1  # K = number of predictors + 1 for the intercept
+
+# Compute AIC for each model
+AIC_values <- n * log(rss / n) + 2 * K
+
+# Identify the best model based on AIC (lowest AIC)
+best.aic <- which.min(AIC_values)
+
+# Print the indices of the best models according to each criterion
+cat("Best model by adjusted R^2: ", best.adjr2, "\n")
+cat("Best model by Mallows' Cp: ", best.cp, "\n")
+cat("Best model by BIC: ", best.bic, "\n")
+cat("Best model by AIC: ", best.aic, "\n")
 
 # Plot Adjusted R^2, Mallows' Cp, and BIC against the number of predictors
 
@@ -384,10 +401,13 @@ points(best.cp, all.subsets.summary$cp[best.cp], col = "red", pch = 19)
 plot(all.subsets.summary$bic, xlab = "Number of Predictors", 
      ylab = "BIC", type = "b", main = "BIC")
 points(best.bic, all.subsets.summary$bic[best.bic], col = "red", pch = 19)
-
+# AIC Plot
+plot(AIC_values, xlab = "Number of Predictors", ylab = "AIC", 
+     type = "b", main = "AIC")
+points(best.aic, AIC_values[best.aic], col = "red", pch = 19)
 
 # Install caret if necessary
-#if (!require(caret)) install.packages("caret")
+if (!require(caret)) install.packages("caret")
 library(caret)
 
 set.seed(123)  # For reproducibility
@@ -409,7 +429,23 @@ plot(cv.model)
 
 # Get the coefficients for the model with the lowest BIC
 best.model.bic <- coef(all.subsets, best.bic)
+cat("Best model by BIC:\n")
 print(best.model.bic)
+
+# Get the coefficients for the model with the lowest AIC
+best.model.aic <- coef(all.subsets, best.aic)
+cat("\nBest model by AIC:\n")
+print(best.model.aic)
+
+# Get the coefficients for the model with the highest Adjusted R^2
+best.model.adjr2 <- coef(all.subsets, best.adjr2)
+cat("\nBest model by Adjusted R^2:\n")
+print(best.model.adjr2)
+
+# Get the coefficients for the model with the lowest Mallows' Cp
+best.model.cp <- coef(all.subsets, best.cp)
+cat("\nBest model by Mallows' Cp:\n")
+print(best.model.cp)
 
 
 ```
@@ -469,16 +505,122 @@ cat("\nBest Model According to AIC:\n")
 print(best_model_aic)
 
 ```
+```{r Adjusted R2, MSE}
+# If not installed, install the 'leaps' package
+#if(!require(leaps)) install.packages("leaps")
+library(leaps)
 
-```{r}
+# Example: we assume 'bodyfatmen' is a data frame with columns:
+#   density, age, weight, height, neck, chest, abdomen,
+#   hip, thigh, knee, ankle, biceps, forearm, wrist
 
-library(MPV)
-library("GGally")  # ggpairs
-ggpairs(data = data.frame(bodyfatmen[,-1]))
-### We can see correlation between many regressors, including
-### x1 vs. x2, x3, x4. This makes sense, given the meanings
-### of each regressor (surface area is correlated to tax rates,
-### number of bedrooms is correlated to number of rooms, etc).
+# Set a seed for reproducibility
+set.seed(1)
+
+# Number of folds for cross-validation
+K <- 10
+
+# Create a vector of fold assignments (randomly 1 through K)
+folds <- sample(1:K, nrow(bodyfatmen), replace = TRUE)
+
+
+# Matrices to store MSE and adjusted R^2 for each fold (row) and model size (column)
+cv.MSE <- matrix(NA, nrow = K, ncol = 13)
+cv.adjR2 <- matrix(NA, nrow = K, ncol = 13)
+
+# Cross-validation loop
+for(k in 1:K) {
+  # Split data into training and test sets
+  train_data <- bodyfatmen[folds != k, ]
+  test_data  <- bodyfatmen[folds == k, ]
+  
+  # Fit all subsets on the training data (up to 13 predictors)
+  best_subset_fit <- regsubsets(
+    density ~ age + weight + height + neck + chest + abdomen +
+      hip + thigh + knee + ankle + biceps + forearm + wrist,
+    data = train_data,
+    nvmax = 13
+  )
+  
+  # Model matrix for the test set
+  test_mat <- model.matrix(
+    density ~ age + weight + height + neck + chest + abdomen +
+      hip + thigh + knee + ankle + biceps + forearm + wrist,
+    data = test_data
+  )
+  
+  # Evaluate each model size from 1 to 13
+  for(size in 1:13) {
+    # Extract the coefficients for the 'size'-predictor model
+    coefs <- coef(best_subset_fit, id = size)
+    
+    # The columns in 'test_mat' must match the names in 'coefs'
+    # Multiply to get predictions on the test set
+    pred <- test_mat[, names(coefs)] %*% coefs
+    
+    # ---- 2A. Compute Test MSE ----
+    residuals <- test_data$density - pred
+    cv.MSE[k, size] <- mean(residuals^2)
+    
+    # ---- 2B. Compute Test Adjusted R^2 ----
+    # We'll define a test-based Adjusted R^2 as:
+    #    1 - (SSE / (n_test - p - 1)) / (SST / (n_test - 1))
+    # where p is the number of predictors (excluding intercept),
+    # SSE is sum of squared errors on test set,
+    # and SST is sum of squared deviations from the test set mean.
+    
+    n_test <- nrow(test_data)
+    p <- size  # number of predictors in the model
+    SSE <- sum(residuals^2)
+    SST <- sum((test_data$density - mean(test_data$density))^2)
+    
+    # Avoid negative or undefined values if size ~ n_test
+    if(n_test > p + 1) {
+      test_adjR2 <- 1 - ((SSE / (n_test - p - 1)) / (SST / (n_test - 1)))
+    } else {
+      test_adjR2 <- NA
+    }
+    
+    cv.adjR2[k, size] <- test_adjR2
+  }
+}
+
+
+# Average test MSE across folds for each model size
+mean_MSE <- apply(cv.MSE, 2, mean, na.rm = TRUE)
+
+# Average test-based adjusted R^2 across folds for each model size
+mean_adjR2 <- apply(cv.adjR2, 2, mean, na.rm = TRUE)
+
+# Find the model size that gives the lowest average test MSE
+best_size_MSE <- which.min(mean_MSE)
+# Find the model size that gives the highest average test-based adjusted R^2
+best_size_adjR2 <- which.max(mean_adjR2)
+
+cat("Best model size by cross-validated test MSE:", best_size_MSE, "\n")
+cat("Best model size by cross-validated test adjusted R^2:", best_size_adjR2, "\n")
+
+# Print the actual values for reference
+cat("\nMean MSE for each model size:\n")
+print(mean_MSE)
+cat("\nMean Adjusted R^2 for each model size:\n")
+print(mean_adjR2)
+
+
+# Refit best-subset with the entire data, up to 13 predictors
+final_fit <- regsubsets(
+  density ~ age + weight + height + neck + chest + abdomen +
+    hip + thigh + knee + ankle + biceps + forearm + wrist,
+  data = bodyfatmen,
+  nvmax = 13
+)
+
+# Extract the coefficients for the best sizes
+cat("\nCoefficients for best size (by MSE):\n")
+print(coef(final_fit, id = best_size_MSE))
+
+cat("\nCoefficients for best size (by Adj R^2):\n")
+print(coef(final_fit, id = best_size_adjR2))
 
 ```
 
@@ -551,16 +693,18 @@ vif_values <- vif(bodyfat.model)
 # Convert to data frame for ggplot
 vif_df <- data.frame(Variable = names(vif_values), VIF = vif_values)
 
-# Plot VIF values
 ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF, fill = VIF)) +
   geom_bar(stat = "identity") +
+  geom_hline(yintercept = 5, linetype = "dashed", color = "blue") +
+  geom_hline(yintercept = 10, linetype = "dashed", color = "red") +
   scale_fill_gradient(low = "green", high = "red") +
   theme_minimal() +
-  coord_flip() +  # Flip axes for better readability
+  coord_flip() +
   labs(title = "Variance Inflation Factor (VIF) for Predictors",
        x = "Predictor Variables",
        y = "VIF Value",
        fill = "VIF")
+
 
 # Compute eigenvalues of XtX (correlation matrix)
 bodyfat.eigen <- eigen(XtX)
