@@ -449,63 +449,7 @@ print(best.model.cp)
 
 
 ```
-```{r Adjusted R2, Mallows Cp, BIC, AIC}
-# Load necessary package
-#if (!require(leaps)) install.packages("leaps")
-library(leaps)
-
-# Run all subsets regression with up to 13 predictors
-all.subsets <- regsubsets(density ~ age + weight + height + neck + chest + abdomen +
-                          hip + thigh + knee + ankle + biceps + forearm + wrist,
-                          data = bodyfatmen, nvmax = 13)
-
-# Get summary of the regsubsets output
-all.subsets.summary <- summary(all.subsets)
-
-# Identify best model indices for each criterion
-best.adjr2_index <- which.max(all.subsets.summary$adjr2)
-best.cp_index    <- which.min(all.subsets.summary$cp)
-best.bic_index   <- which.min(all.subsets.summary$bic)
-
-cat("Best model by Adjusted R^2 uses", best.adjr2_index, "predictors\n")
-cat("Best model by Mallows' Cp uses", best.cp_index, "predictors\n")
-cat("Best model by BIC uses", best.bic_index, "predictors\n")
-
-# Compute AIC for each model size
-# AIC = n*log(RSS/n) + 2K, where K = number of parameters (predictors + intercept)
-n <- nrow(bodyfatmen)
-num_models <- length(all.subsets.summary$rss)  # should be 13
-aic_values <- rep(NA, num_models)
-
-for(i in 1:num_models) {
-  k <- i + 1  # i predictors + intercept
-  rss <- all.subsets.summary$rss[i]
-  aic_values[i] <- n * log(rss / n) + 2 * k
-}
-
-best.aic_index <- which.min(aic_values)
-cat("Best model by AIC uses", best.aic_index, "predictors\n")
-
-# Extract coefficients for the best models according to each criterion
-best_model_adjr2 <- coef(all.subsets, best.adjr2_index)
-best_model_cp    <- coef(all.subsets, best.cp_index)
-best_model_bic   <- coef(all.subsets, best.bic_index)
-best_model_aic   <- coef(all.subsets, best.aic_index)
-
-cat("\nBest Model According to Adjusted R^2:\n")
-print(best_model_adjr2)
-
-cat("\nBest Model According to Mallows' Cp:\n")
-print(best_model_cp)
-
-cat("\nBest Model According to BIC:\n")
-print(best_model_bic)
-
-cat("\nBest Model According to AIC:\n")
-print(best_model_aic)
-
-```
-```{r Adjusted R2, MSE}
+```{r Cross validation - Adjusted R2, MSE}
 # If not installed, install the 'leaps' package
 #if(!require(leaps)) install.packages("leaps")
 library(leaps)
@@ -623,6 +567,67 @@ cat("\nCoefficients for best size (by Adj R^2):\n")
 print(coef(final_fit, id = best_size_adjR2))
 
 ```
+
+```{r}
+# Load required packages
+if (!require(leaps)) install.packages("leaps")
+library(leaps)
+if (!require(caret)) install.packages("caret")
+library(caret)
+if (!require(boot)) install.packages("boot")
+library(boot)
+
+# (Assuming the previous code has been run to compute all.subsets and best.bic, etc.)
+# Get the coefficients for the best model by BIC
+best.model.bic <- coef(all.subsets, best.bic)
+cat("Best model by BIC:\n")
+print(best.model.bic)
+
+# Identify the predictors in the best model (exclude intercept)
+predictors <- names(best.model.bic)[-1]
+
+# Construct the formula for the selected model
+formula_str <- paste("density ~", paste(predictors, collapse = " + "))
+model_formula <- as.formula(formula_str)
+cat("\nModel formula based on best BIC model:\n")
+print(model_formula)
+
+# Fit the linear model on the full dataset for reference
+lm_fit <- lm(model_formula, data = bodyfatmen)
+summary(lm_fit)
+
+# Define a bootstrap function to compute coefficient estimates
+boot_fn <- function(data, indices) {
+  # Resample the data with indices provided by boot()
+  boot_data <- data[indices, ]
+  # Fit the linear model on the bootstrap sample
+  fit <- lm(model_formula, data = boot_data)
+  # Return the coefficients
+  return(coef(fit))
+}
+
+set.seed(123)  # For reproducibility
+
+# Run bootstrap with 1000 replications
+boot_results <- boot(data = bodyfatmen, statistic = boot_fn, R = 1000)
+print(boot_results)
+
+# Obtain bootstrap confidence intervals (percentile method) for each coefficient
+cat("\nBootstrap Percentile Confidence Intervals:\n")
+boot_ci_list <- list()
+
+for (i in 1:length(boot_results$t0)) {
+  coef_name <- names(boot_results$t0)[i]
+  # Compute the percentile CI for the ith coefficient
+  ci <- boot.ci(boot_results, type = "perc", index = i)
+  boot_ci_list[[coef_name]] <- ci$perc[4:5]
+  cat(sprintf("%s: [%.4f, %.4f]\n", coef_name, ci$perc[4], ci$perc[5]))
+}
+
+# You now have the bootstrap-based confidence intervals for the regression coefficients
+
+```
+
 
 
 
