@@ -1,0 +1,178 @@
+```{r}
+# Load pacman and install required packages
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, ggplot2, caret, corrplot, psych, stringr, ggpubr, forecast, gridExtra, car, ggcorrplot)
+options(scipen=999) # surpress scientific notation
+```
+
+```{r}
+# Read dataset
+bfat = read.csv("bodyfatmen.csv")
+```
+
+```{r}
+# Fit model
+model = lm(density ~ . , data = bfat)
+```
+
+```{r}
+# Summary statistics
+summary(model)
+```
+- Abdomen, followed by wrist, followed by neck and forearm are significant predictors, the rest not so much
+- Adjusted R-squared value indicates a decent fit
+- Good F-statistic indicates model is highly significant
+
+
+## ===== Residuals analysis ===== ## 
+```{r}
+# Get studentized residuals
+stud_res = rstudent(model)
+```
+
+```{r}
+# Plot Residuals vs Fitted
+ggplot(data.frame(Fitted = fitted(model), Residuals = stud_res), aes(x = Fitted, y = Residuals)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Residuals vs Fitted", x = "Fitted Values", y = "Residuals")
+```
+points randomly scattered around 0 => linearity
+points evenly spread out across the fitted values => homoscedasticity (equal variance)
+some points seem to be far apart => some outliers/influential points
+
+## ===== End of Residuals analysis ===== ## 
+
+
+
+
+
+## ===== Determining normality ===== ## 
+```{r}
+qqnorm(stud_res)
+qqline(stud_res, col='red')
+```
+```{r}
+qqPlot(model, main = "Q-Q Plot of Residuals")
+```
+qqplot indicates a rather normally distributed studentized residuals
+
+```{r}
+# Plot histogram
+hist(stud_res, main = "Histogram of Residuals", xlab = "Residuals", ylab = "Frequency", breaks = 20)
+
+# Impose Normal pdf
+xpt = seq(min(stud_res), max(stud_res), by=0.1) # start, end, interval
+n_den = dnorm(xpt, mean(stud_res), sd(stud_res)) # normal density w mean and sd of the data
+
+# Get bin width from the histogram
+hist_info <- hist(stud_res, breaks = 20, plot = FALSE)  # Store histogram data without plotting
+bin_width <- hist_info$breaks[2] - hist_info$breaks[1]  # Compute actual bin width
+
+ypt = n_den * length(stud_res) * bin_width # adjust the normal density to the length of the dataset * width of each bin
+lines(xpt, ypt, col='blue')
+```
+histogram also indicates that the studentized residuals are normally distributed (with an outlier)
+
+```{r}
+shapiro.test(stud_res)
+```
+
+## ===== End of Determining normality ===== ## 
+
+
+
+
+
+## ===== Identifying Leverage & Influence Points ===== ## 
+
+```{r}
+outliers <- which(abs(stud_res) > 3) 
+# Reference for cutoff: https://online.stat.psu.edu/stat462/node/247/#:~:text=If%20an%20observation%20has%20a,than%203%20in%20absolute%20value.
+
+print(outliers)
+```
+Only 1 outlier identified, at entry 96
+
+```{r}
+# Identifying Leverage points
+# Reference: https://www.statology.org/leverage-in-r/
+# Get hat values and store them in a data frame
+hats <- data.frame(HatValue = hatvalues(model))
+
+# Display sorted hat values (descending order)
+hats[order(-hats$HatValue), , drop=FALSE]
+
+# Implementing cutoff for leverage points using 2p/n
+p = length(coef(model)) # number of predictors (including intercept)
+n = nrow(bfat) # number of rows of data
+leverage_cutoff = 2*p/n # 0.1111..
+#print(leverage_cutoff)
+
+# Show entries that exceed cutoff
+which(hats$HatValue > leverage_cutoff)
+
+```
+- The leverage points are (5  31  36  39  41  42  54  86 106 159 175 206 216) based on the cutoff rule 2p/n
+- On manual inspection of the points, nothing seem out of the ordinary
+
+```{r}
+# Identifying influence points using Cook's Distance 
+# Cooks distance cutoff (F statistic - alpha, p, n-p)
+alpha = 0.5
+cook_cutoff <- qf(alpha, p, n - p) # calculate cutoff (p and n calculated above for leverage pts)
+print(cook_cutoff)
+
+# Plot cooks distance 
+cooksd <- cooks.distance(model)
+plot(cooksd, type = "h", main = "Cook’s Distance")
+abline(h = cook_cutoff, col = "red")  # Threshold line
+
+# Print influential points
+high_influence <- which(cooksd > cook_cutoff)
+print(high_influence)
+```
+Seems like there are no influential points based on Cook's Distance
+
+```{r}
+# Might want to look at DFFITS & DFBETAS for influence also
+
+```
+
+Even though there seem to be some outliers and leverage points, when all things considered and using Cook's Distance, none of them seem to be influential points which indicate that there may not be a need to remove any points. The outlier (96th record) is not a leverage point, and none of the leverage points are outliers.
+
+## ===== End of Identifying Leverage & Influence Points ===== ## 
+
+
+
+
+
+## ===== Multicollinearity ===== ## 
+
+Next steps:
+- Multicollinearity diagnosis
+```{r}
+# Correlation plot to check for pairwise correlations
+cor_matrix <- cor(bfat[, -1])
+# Plot correlation matrix
+corrplot(cor_matrix, method = "color", type = "lower",
+         tl.cex = 0.7,   # Reduce axis label size
+         number.cex = 0.7,  # Reduce number size inside squares
+         addCoef.col = "black",  # Show numbers inside squares
+         title = "Correlation Plot of Predictors")
+```
+
+```{r}
+# VIF analysis
+vif_vals = vif(model)
+print(vif_vals)
+# Visualizing VIF
+barplot(vif_vals, col = "skyblue", main = "Variance Inflation Factor (VIF)", las=2)
+abline(h = 10, col = "red")
+abline(h = 5, col = "blue")
+```
+- Using the cutoff rule of vif > 10, we see that 'weight', 'abdomen', and 'hip' are significant
+- 'Chest' is borderline
+
+
+
