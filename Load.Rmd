@@ -331,6 +331,9 @@ ggplot(data = melted_bodyfatmen, aes(x=Var1, y=Var2, fill=value)) +
   geom_tile()
 ```
 
+```{r}
+
+```
 
 
 ```{r All possible models then best based on BIC (variable selection)}
@@ -380,6 +383,10 @@ AIC_values <- n * log(rss / n) + 2 * K
 # Identify the best model based on AIC (lowest AIC)
 best.aic <- which.min(AIC_values)
 
+
+best.bic <- which.min(AIC_values)
+
+
 # Print the indices of the best models according to each criterion
 cat("Best model by adjusted R^2: ", best.adjr2, "\n")
 cat("Best model by Mallows' Cp: ", best.cp, "\n")
@@ -388,7 +395,7 @@ cat("Best model by AIC: ", best.aic, "\n")
 
 # Plot Adjusted R^2, Mallows' Cp, and BIC against the number of predictors
 
-par(mfrow = c(1,3))
+par(mfrow = c(1,4))
 
 plot(all.subsets.summary$adjr2, xlab = "Number of Predictors", 
      ylab = "Adjusted R^2", type = "b", main = "Adjusted R^2")
@@ -449,6 +456,23 @@ print(best.model.cp)
 
 
 ```
+
+```{r}
+bestaicmodel <- lm(density ~ age + weight  + neck  + abdomen + hip + thigh + biceps + forearm + wrist, data=bodyfatmen)
+bestbicmodel <- lm(density ~  weight + abdomen + forearm + wrist +, data=bodyfatmen)
+
+
+bestrmodel <- lm(density ~ age + weight  + neck  + abdomen + hip + thigh + biceps + forearm + wrist, data=bodyfatmen)
+bestcpmodel <- lm(density ~  age + weight + neck + abdomen + hip + wrist +  abdomen*wrist, data=bodyfatmen)
+
+combomodel <- lm(density ~  abdomen*thigh*hip/weight +age + chest + wrist  , data=bodyfatmen)
+
+summary(combomodel)
+predict1 <- predict(combomodel, newdata = bodyfatmen)
+mse_full <- mean((bodyfatmen$density - predict1)^2)
+cat(mse_full)
+```
+
 ```{r Cross validation - Adjusted R2, MSE}
 # If not installed, install the 'leaps' package
 #if(!require(leaps)) install.packages("leaps")
