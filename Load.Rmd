@@ -384,9 +384,6 @@ AIC_values <- n * log(rss / n) + 2 * K
 best.aic <- which.min(AIC_values)
 
 
-best.bic <- which.min(AIC_values)
-
-
 # Print the indices of the best models according to each criterion
 cat("Best model by adjusted R^2: ", best.adjr2, "\n")
 cat("Best model by Mallows' Cp: ", best.cp, "\n")
@@ -457,202 +454,78 @@ print(best.model.cp)
 
 ```
 
-```{r}
-bestaicmodel <- lm(density ~ age + weight  + neck  + abdomen + hip + thigh + biceps + forearm + wrist, data=bodyfatmen)
-bestbicmodel <- lm(density ~  weight + abdomen + forearm + wrist +, data=bodyfatmen)
 
+```{r Best model for criterion}
+# Fit the models
+bestaicmodel <- lm(density ~ age + weight + neck + abdomen + hip + thigh + biceps + forearm + wrist, data = bodyfatmen)
+bestbicmodel <- lm(density ~ weight + abdomen + forearm + wrist, data = bodyfatmen)
+bestrmodel  <- lm(density ~ age + weight + neck + abdomen + hip + thigh + biceps + forearm + wrist, data = bodyfatmen)
+bestcpmodel <- lm(density ~ age + weight + neck + abdomen + hip + wrist + abdomen * wrist, data = bodyfatmen)
+combomodel  <- lm(density ~ abdomen * thigh * hip / weight + age + chest + wrist, data = bodyfatmen)
 
-bestrmodel <- lm(density ~ age + weight  + neck  + abdomen + hip + thigh + biceps + forearm + wrist, data=bodyfatmen)
-bestcpmodel <- lm(density ~  age + weight + neck + abdomen + hip + wrist +  abdomen*wrist, data=bodyfatmen)
-
-combomodel <- lm(density ~  abdomen*thigh*hip/weight +age + chest + wrist  , data=bodyfatmen)
-
-summary(combomodel)
-predict1 <- predict(combomodel, newdata = bodyfatmen)
-mse_full <- mean((bodyfatmen$density - predict1)^2)
-cat(mse_full)
-```
-
-```{r Cross validation - Adjusted R2, MSE}
-# If not installed, install the 'leaps' package
-#if(!require(leaps)) install.packages("leaps")
-library(leaps)
-
-# Example: we assume 'bodyfatmen' is a data frame with columns:
-#   density, age, weight, height, neck, chest, abdomen,
-#   hip, thigh, knee, ankle, biceps, forearm, wrist
-
-# Set a seed for reproducibility
-set.seed(1)
-
-# Number of folds for cross-validation
-K <- 10
-
-# Create a vector of fold assignments (randomly 1 through K)
-folds <- sample(1:K, nrow(bodyfatmen), replace = TRUE)
-
-
-# Matrices to store MSE and adjusted R^2 for each fold (row) and model size (column)
-cv.MSE <- matrix(NA, nrow = K, ncol = 13)
-cv.adjR2 <- matrix(NA, nrow = K, ncol = 13)
-
-# Cross-validation loop
-for(k in 1:K) {
-  # Split data into training and test sets
-  train_data <- bodyfatmen[folds != k, ]
-  test_data  <- bodyfatmen[folds == k, ]
-  
-  # Fit all subsets on the training data (up to 13 predictors)
-  best_subset_fit <- regsubsets(
-    density ~ age + weight + height + neck + chest + abdomen +
-      hip + thigh + knee + ankle + biceps + forearm + wrist,
-    data = train_data,
-    nvmax = 13
-  )
-  
-  # Model matrix for the test set
-  test_mat <- model.matrix(
-    density ~ age + weight + height + neck + chest + abdomen +
-      hip + thigh + knee + ankle + biceps + forearm + wrist,
-    data = test_data
-  )
-  
-  # Evaluate each model size from 1 to 13
-  for(size in 1:13) {
-    # Extract the coefficients for the 'size'-predictor model
-    coefs <- coef(best_subset_fit, id = size)
-    
-    # The columns in 'test_mat' must match the names in 'coefs'
-    # Multiply to get predictions on the test set
-    pred <- test_mat[, names(coefs)] %*% coefs
-    
-    # ---- 2A. Compute Test MSE ----
-    residuals <- test_data$density - pred
-    cv.MSE[k, size] <- mean(residuals^2)
-    
-    # ---- 2B. Compute Test Adjusted R^2 ----
-    # We'll define a test-based Adjusted R^2 as:
-    #    1 - (SSE / (n_test - p - 1)) / (SST / (n_test - 1))
-    # where p is the number of predictors (excluding intercept),
-    # SSE is sum of squared errors on test set,
-    # and SST is sum of squared deviations from the test set mean.
-    
-    n_test <- nrow(test_data)
-    p <- size  # number of predictors in the model
-    SSE <- sum(residuals^2)
-    SST <- sum((test_data$density - mean(test_data$density))^2)
-    
-    # Avoid negative or undefined values if size ~ n_test
-    if(n_test > p + 1) {
-      test_adjR2 <- 1 - ((SSE / (n_test - p - 1)) / (SST / (n_test - 1)))
-    } else {
-      test_adjR2 <- NA
-    }
-    
-    cv.adjR2[k, size] <- test_adjR2
-  }
-}
-
-
-# Average test MSE across folds for each model size
-mean_MSE <- apply(cv.MSE, 2, mean, na.rm = TRUE)
-
-# Average test-based adjusted R^2 across folds for each model size
-mean_adjR2 <- apply(cv.adjR2, 2, mean, na.rm = TRUE)
-
-# Find the model size that gives the lowest average test MSE
-best_size_MSE <- which.min(mean_MSE)
-# Find the model size that gives the highest average test-based adjusted R^2
-best_size_adjR2 <- which.max(mean_adjR2)
-
-cat("Best model size by cross-validated test MSE:", best_size_MSE, "\n")
-cat("Best model size by cross-validated test adjusted R^2:", best_size_adjR2, "\n")
-
-# Print the actual values for reference
-cat("\nMean MSE for each model size:\n")
-print(mean_MSE)
-cat("\nMean Adjusted R^2 for each model size:\n")
-print(mean_adjR2)
-
-
-# Refit best-subset with the entire data, up to 13 predictors
-final_fit <- regsubsets(
-  density ~ age + weight + height + neck + chest + abdomen +
-    hip + thigh + knee + ankle + biceps + forearm + wrist,
-  data = bodyfatmen,
-  nvmax = 13
+# Store models in a list for convenience
+models <- list(
+  bestaicmodel = bestaicmodel,
+  bestbicmodel = bestbicmodel,
+  bestrmodel  = bestrmodel,
+  bestcpmodel = bestcpmodel,
+  combomodel  = combomodel
 )
 
-# Extract the coefficients for the best sizes
-cat("\nCoefficients for best size (by MSE):\n")
-print(coef(final_fit, id = best_size_MSE))
+# Calculate adjusted R-squared for each model
+adj_r2 <- sapply(models, function(mod) summary(mod)$adj.r.squared)
+cat("Adjusted R-squared values:\n")
+print(adj_r2)
 
-cat("\nCoefficients for best size (by Adj R^2):\n")
-print(coef(final_fit, id = best_size_adjR2))
+# Calculate the Mean Squared Error (MSE) for each model
+mse <- sapply(models, function(mod) {
+  pred <- predict(mod, newdata = bodyfatmen)
+  mean((bodyfatmen$density - pred)^2)
+})
+cat("\nMean Squared Errors (MSE):\n")
+print(mse)
 
 ```
 
 ```{r}
-# Load required packages
-if (!require(leaps)) install.packages("leaps")
-library(leaps)
-if (!require(caret)) install.packages("caret")
-library(caret)
-if (!require(boot)) install.packages("boot")
-library(boot)
+# Load the MASS package (install if needed)
+if (!require(MASS)) install.packages("MASS")
+library(MASS)
 
-# (Assuming the previous code has been run to compute all.subsets and best.bic, etc.)
-# Get the coefficients for the best model by BIC
-best.model.bic <- coef(all.subsets, best.bic)
-cat("Best model by BIC:\n")
-print(best.model.bic)
+# Define a full model with pairwise interactions as an example
+full_formula <- as.formula("density ~ (age + weight + height + neck + chest + abdomen +
+                                     hip + thigh + knee + ankle + biceps + forearm + wrist)^2")
 
-# Identify the predictors in the best model (exclude intercept)
-predictors <- names(best.model.bic)[-1]
+# Fit the full model
+full_model <- lm(full_formula, data = bodyfatmen)
 
-# Construct the formula for the selected model
-formula_str <- paste("density ~", paste(predictors, collapse = " + "))
-model_formula <- as.formula(formula_str)
-cat("\nModel formula based on best BIC model:\n")
-print(model_formula)
+# Number of observations
+n_obs <- nrow(bodyfatmen)
 
-# Fit the linear model on the full dataset for reference
-lm_fit <- lm(model_formula, data = bodyfatmen)
-summary(lm_fit)
+# Perform stepwise selection using BIC by setting k = log(n)
+bic_model <- stepAIC(full_model, direction = "both", k = log(n_obs), trace = FALSE)
 
-# Define a bootstrap function to compute coefficient estimates
-boot_fn <- function(data, indices) {
-  # Resample the data with indices provided by boot()
-  boot_data <- data[indices, ]
-  # Fit the linear model on the bootstrap sample
-  fit <- lm(model_formula, data = boot_data)
-  # Return the coefficients
-  return(coef(fit))
-}
+# Display the selected model's summary
+summary(bic_model)
 
-set.seed(123)  # For reproducibility
-
-# Run bootstrap with 1000 replications
-boot_results <- boot(data = bodyfatmen, statistic = boot_fn, R = 1000)
-print(boot_results)
-
-# Obtain bootstrap confidence intervals (percentile method) for each coefficient
-cat("\nBootstrap Percentile Confidence Intervals:\n")
-boot_ci_list <- list()
-
-for (i in 1:length(boot_results$t0)) {
-  coef_name <- names(boot_results$t0)[i]
-  # Compute the percentile CI for the ith coefficient
-  ci <- boot.ci(boot_results, type = "perc", index = i)
-  boot_ci_list[[coef_name]] <- ci$perc[4:5]
-  cat(sprintf("%s: [%.4f, %.4f]\n", coef_name, ci$perc[4], ci$perc[5]))
-}
-
-# You now have the bootstrap-based confidence intervals for the regression coefficients
+# Display the selected model formula
+cat("Selected Model Formula (using BIC):\n")
+print(formula(bic_model))
 
 ```
+```{r}
+predictions <-predict(bic_model, newdata= bodyfatmen)
 
-
+mse_bic <- mean((bodyfatmen$density-predictions)^2)
+cat(mse_bic)
+```
+```{r}
+bicmulti <- lm(formula = density ~ weight + height + neck + chest + abdomen + 
+    hip + thigh + ankle + forearm + wrist + weight*wrist + height*wrist + 
+    neck*abdomen + neck*thigh + neck*forearm + neck*wrist + chest*abdomen + 
+    hip*wrist + ankle*wrist + forearm*wrist, data = bodyfatmen)
+summary(bicmulti)
+```
 
 
 ```{r Multicollinearity}
