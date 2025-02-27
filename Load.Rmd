@@ -79,13 +79,6 @@ vif(bodyfat.model)
 
 
 
-
-
-
-
-
-
-
 ```{r R^2 Coefficient of Determination}
 # Get the summary of the model
 model_summary <- summary(bodyfat.model)
@@ -97,32 +90,6 @@ adj_r_squared <- model_summary$adj.r.squared
 # Print the values
 print(paste("R-squared:", r_squared))
 print(paste("Adjusted R-squared:", adj_r_squared))
-```
-
-```{r An example of a Transformation, albeit we say we don't need transform}
-library(MASS)
-bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen +
-                      hip + thigh + knee + ankle + biceps + forearm + wrist,
-                      data = bodyfatmen)
-
-bc <- boxcox(bodyfat.model, lambda = seq(-2, 2, 0.1))
-# Identify the lambda with the maximum log-likelihood:
-optimal_lambda <- bc$x[which.max(bc$y)]
-print(optimal_lambda)
-
-bodyfatmen$density_trans <- if(optimal_lambda == 0) {
-  log(bodyfatmen$density)
-} else {
-  (bodyfatmen$density^optimal_lambda - 1) / optimal_lambda
-}
-bodyfat_trans_model <- lm(density_trans ~ age + weight + height + neck + chest +
-                          abdomen + hip + thigh + knee + ankle + biceps +
-                          forearm + wrist, data = bodyfatmen)
-model_residuals =bodyfat_trans_model$residuals
-hist(model_residuals)
-qqnorm(rstudent(bodyfat_trans_model))
-qqline(rstudent(bodyfat_trans_model))
-
 ```
 
 ```{r QQ-plot and Studentized residual vs fitted value plot}
@@ -320,22 +287,6 @@ cat("Partial residual plots with outliers saved in 'Partial_Residual_Plot_Outlie
 
 
 
-
-```{r}
-library(reshape2)
-melted_bodyfatmen <- melt(bodyfatmen)
-head(melted_bodyfatmen)
-
-library(ggplot2)
-ggplot(data = melted_bodyfatmen, aes(x=Var1, y=Var2, fill=value)) + 
-  geom_tile()
-```
-
-```{r}
-
-```
-
-
 ```{r All possible models then best based on BIC (variable selection)}
 # Install packages if not already installed
 if (!require(leaps)) install.packages("leaps")
@@ -454,8 +405,7 @@ print(best.model.cp)
 
 ```
 
-
-```{r Best model for criterion}
+```{r Best model for criteria}
 # Fit the models
 bestaicmodel <- lm(density ~ age + weight + neck + abdomen + hip + thigh + biceps + forearm + wrist, data = bodyfatmen)
 bestbicmodel <- lm(density ~ weight + abdomen + forearm + wrist, data = bodyfatmen)
@@ -487,7 +437,7 @@ print(mse)
 
 ```
 
-```{r}
+```{r Product regressors too}
 # Load the MASS package (install if needed)
 if (!require(MASS)) install.packages("MASS")
 library(MASS)
@@ -503,7 +453,7 @@ full_model <- lm(full_formula, data = bodyfatmen)
 n_obs <- nrow(bodyfatmen)
 
 # Perform stepwise selection using BIC by setting k = log(n)
-bic_model <- stepAIC(full_model, direction = "both", k = log(n_obs), trace = FALSE)
+bic_modelproduct <- stepAIC(full_model, direction = "both", k = log(n_obs), trace = FALSE)
 
 # Display the selected model's summary
 summary(bic_model)
@@ -512,20 +462,19 @@ summary(bic_model)
 cat("Selected Model Formula (using BIC):\n")
 print(formula(bic_model))
 
-```
-```{r}
-predictions <-predict(bic_model, newdata= bodyfatmen)
-
+#MSE for bic_model
+predictions <-predict(bic_modelproduct, newdata= bodyfatmen)
 mse_bic <- mean((bodyfatmen$density-predictions)^2)
 cat(mse_bic)
-```
-```{r}
+
 bicmulti <- lm(formula = density ~ weight + height + neck + chest + abdomen + 
     hip + thigh + ankle + forearm + wrist + weight*wrist + height*wrist + 
     neck*abdomen + neck*thigh + neck*forearm + neck*wrist + chest*abdomen + 
     hip*wrist + ankle*wrist + forearm*wrist, data = bodyfatmen)
 summary(bicmulti)
+
 ```
+
 
 
 ```{r Multicollinearity}
@@ -582,284 +531,5 @@ ggplot(data = XtX_melted, aes(x = Var1, y = Var2, fill = value)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(title = "Correlation Matrix Heatmap", fill = "Correlation")
-
-```
-
-```{r VIF and Eigenvalue}
-# Load necessary library
-library(ggplot2)
-
-# Compute Variance Inflation Factors
-vif_values <- vif(bodyfat.model)
-
-# Convert to data frame for ggplot
-vif_df <- data.frame(Variable = names(vif_values), VIF = vif_values)
-
-ggplot(vif_df, aes(x = reorder(Variable, VIF), y = VIF, fill = VIF)) +
-  geom_bar(stat = "identity") +
-  geom_hline(yintercept = 5, linetype = "dashed", color = "blue") +
-  geom_hline(yintercept = 10, linetype = "dashed", color = "red") +
-  scale_fill_gradient(low = "green", high = "red") +
-  theme_minimal() +
-  coord_flip() +
-  labs(title = "Variance Inflation Factor (VIF) for Predictors",
-       x = "Predictor Variables",
-       y = "VIF Value",
-       fill = "VIF")
-
-
-# Compute eigenvalues of XtX (correlation matrix)
-bodyfat.eigen <- eigen(XtX)
-
-# Convert to data frame
-eigen_df <- data.frame(Eigenvalue = bodyfat.eigen$values,
-                       Index = seq_along(bodyfat.eigen$values))
-
-# Compute condition number
-condition_number <- max(eigen_df$Eigenvalue) / min(eigen_df$Eigenvalue)
-
-# Plot eigenvalues
-ggplot(eigen_df, aes(x = Index, y = Eigenvalue, fill = Eigenvalue)) +
-  geom_bar(stat = "identity") +
-  scale_fill_gradient(low = "blue", high = "orange") +
-  theme_minimal() +
-  labs(title = paste("Eigenvalues of XtX (Condition Number =", round(condition_number, 2), ")"),
-       x = "Index",
-       y = "Eigenvalue",
-       fill = "Eigenvalue")
-
-
-```
-
-
-```{r Best Subset Regression for Density Prediction}
-# Load necessary libraries
-library(car)    # For multicollinearity diagnostics
-library(leaps)  # For best subset selection
-library(glmnet) # For Ridge and Lasso
-library(boot)   # For cross-validation
-library(MASS)   # For stepwise selection
-
-# Define dependent and independent variables
-y <- bodyfatmen$density
-X <- bodyfatmen[, !(names(bodyfatmen) %in% c("density"))]
-
-# Compute Variance Inflation Factor (VIF)
-vif_results <- vif(lm(y ~ ., data=bodyfatmen))
-print(vif_results)
-
-# Perform best subset selection
-best_subset <- regsubsets(density ~ ., data=bodyfatmen, nvmax=ncol(X))
-
-# Get summary of best models
-best_summary <- summary(best_subset)
-
-# Display model selection criteria
-best_models <- data.frame(
-  Num_Variables = 1:length(best_summary$rsq),
-  Adjusted_R2 = best_summary$adjr2,
-  Cp = best_summary$cp,
-  BIC = best_summary$bic
-)
-
-print(best_models)
-
-
-```
-
-
-```{r Some help}
-# ============================
-# 1. LOAD LIBRARIES AND DATA
-# ============================
-
-# Load necessary libraries
-library(car)       # For VIF, diagnostic plots, etc.
-library(MASS)      # For stepAIC and Box–Cox transformations
-library(leaps)     # For all subsets regression (regsubsets)
-library(boot)      # For cross-validation and bootstrapping
-library(ggplot2)   # For plotting
-library(reshape2)  # For reshaping correlation matrices for heatmaps
-
-# Load your data (update the file path as needed)
-bodyfatmen <- read.csv("bodyfatmen.csv", header = TRUE)
-
-# ============================
-# 2. MULTICOLLINEARITY DIAGNOSTICS
-# ============================
-
-# Fit the full model using all predictors
-full_model <- lm(density ~ age + weight + height + neck + chest + abdomen +
-                   hip + thigh + knee + ankle + biceps + forearm + wrist,
-                 data = bodyfatmen)
-
-# (a) Correlation Matrix of Predictors (excluding the response)
-predictors <- bodyfatmen[, setdiff(names(bodyfatmen), "density")]
-cor_matrix <- cor(predictors)
-print("Correlation matrix of predictors:")
-print(cor_matrix)
-
-# Plot a heatmap of the correlation matrix
-melted_cor <- melt(cor_matrix)
-ggplot(data = melted_cor, aes(x = Var1, y = Var2, fill = value)) +
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  ggtitle("Correlation Matrix Heatmap")
-
-# (b) Variance Inflation Factors (VIF)
-vif_values <- vif(full_model)
-print("Variance Inflation Factors (VIF):")
-print(vif_values)
-
-# (c) Eigenvalues and Condition Number for XtX
-X <- model.matrix(full_model)
-XtX <- t(X) %*% X
-eigen_vals <- eigen(XtX)$values
-condition_number <- max(eigen_vals) / min(eigen_vals)
-print("Eigenvalues of XtX:")
-print(eigen_vals)
-print(paste("Condition Number:", round(condition_number, 2)))
-# Note: A condition number > 100 may indicate potential multicollinearity.
-
-# ============================
-# 3. VARIABLE SELECTION METHODS
-# ============================
-
-# (a) All Possible Regressions using 'regsubsets'
-all_subsets <- regsubsets(density ~ age + weight + height + neck + chest +
-                            abdomen + hip + thigh + knee + ankle + biceps +
-                            forearm + wrist, data = bodyfatmen, nvmax = 13)
-all_subsets_summary <- summary(all_subsets)
-print("All subsets regression summary:")
-print(all_subsets_summary)
-# Inspect criteria such as Adjusted R^2, Mallows’ Cp, and BIC from the summary
-# e.g., all_subsets_summary$adjr2, all_subsets_summary$cp, all_subsets_summary$bic
-
-# (b) Forward/Backward Elimination using stepAIC
-step_model <- stepAIC(full_model, direction = "both", trace = FALSE)
-print("Stepwise Selection Model Summary:")
-summary(step_model)
-
-# ============================
-# 4. CROSS-VALIDATION FOR MODEL EVALUATION
-# ============================
-
-# Partition the data into a training set (70%) and a test set (30%)
-set.seed(123)
-n <- nrow(bodyfatmen)
-train_indices <- sample(1:n, size = floor(0.7 * n))
-train_data <- bodyfatmen[train_indices, ]
-test_data <- bodyfatmen[-train_indices, ]
-
-# Suppose variable selection (and diagnostics) led to the following final model:
-final_model <- lm(density ~ weight + height + abdomen + I(abdomen^2) + wrist,
-                  data = train_data)
-print("Final Model Summary:")
-summary(final_model)
-
-# (a) Predict on the Test Set and Calculate Test MSE
-predictions <- predict(final_model, newdata = test_data)
-test_MSE <- mean((test_data$density - predictions)^2)
-print(paste("Test Set MSE:", round(test_MSE, 4)))
-
-# (b) Calculate Adjusted R^2 on the Test Set (manual calculation)
-SSE <- sum((test_data$density - predictions)^2)
-SST <- sum((test_data$density - mean(train_data$density))^2)
-R2 <- 1 - SSE / SST
-n_test <- nrow(test_data)
-p_final <- length(coef(final_model)) - 1  # Number of predictors
-adj_R2 <- 1 - ((1 - R2) * (n_test - 1) / (n_test - p_final - 1))
-print(paste("Test Set Adjusted R^2:", round(adj_R2, 4)))
-
-# (c) Alternatively, perform 10-fold cross-validation using cv.glm
-cv_results <- cv.glm(data = bodyfatmen, glmfit = final_model, K = 10)
-print("10-fold Cross-Validation MSE (cv.glm):")
-print(cv_results$delta[1])  # The first value is the raw cross-validation estimate
-
-# ============================
-# 5. BOOTSTRAP PROCEDURES FOR MODEL ASSESSMENT
-# ============================
-
-# (a) Bootstrap to Generate Confidence Intervals for Regression Coefficients
-# using the percentile method (based on bootstrapped residuals)
-
-set.seed(123)
-n_boot <- 1000  # Number of bootstrap samples
-boot_coefs <- matrix(NA, n_boot, length(coef(final_model)))
-colnames(boot_coefs) <- names(coef(final_model))
-
-# Bootstrap loop: resample residuals and refit the model
-for (i in 1:n_boot) {
-  # Resample residuals with replacement from the final model
-  boot_residuals <- sample(resid(final_model), replace = TRUE)
-  # Generate new response: fitted values + resampled residuals
-  boot_y <- fitted(final_model) + boot_residuals
-  # Refit the final model using the bootstrapped response
-  boot_model <- lm(boot_y ~ weight + height + abdomen + I(abdomen^2) + wrist,
-                   data = train_data)
-  boot_coefs[i, ] <- coef(boot_model)
-}
-
-# Calculate 95% bootstrap confidence intervals (percentile method)
-boot_ci <- apply(boot_coefs, 2, quantile, probs = c(0.025, 0.975))
-print("Bootstrap-based 95% Confidence Intervals for Regression Coefficients:")
-print(boot_ci)
-
-# ============================
-# 6. FINAL MODEL SPECIFICATION
-# ============================
-# Our final selected model is:
-#   density ~ weight + height + abdomen + I(abdomen^2) + wrist
-#
-# This model was chosen based on diagnostics (e.g., residual analysis, VIFs),
-# variable selection (using all-subsets and stepwise elimination), and cross-validation
-# which indicated favorable predictive performance (i.e., low MSE and high adjusted R^2).
-
-print("Final Model Specification:")
-print(summary(final_model))
-
-```
-```{r Quick overview analysis}
-full_model <- lm(density ~ ., data = bodyfatmen)
-summary(full_model)
-par(mfrow = c(1, 1))  # Arrange diagnostic plots in a 2x2 grid
-plot(full_model)
-
-```
-```{r Summary Statistics, makes into Latex code}
-# Install and load xtable
-install.packages("xtable")  # Install if not already installed
-library(xtable)
-
-# Get the summary
-summary_stats <- summary(bodyfatmen)
-
-# Convert to a LaTeX table
-latex_table <- xtable(summary_stats)
-
-# Print LaTeX code
-print(latex_table, type = "latex")
-
-
-```
-```{r Other}
-cor(bodyfatmen)
-pairs(bodyfatmen)
-library(MASS)
-stepwise_model <- stepAIC(full_model, direction = "both")
-summary(stepwise_model)
-library(leaps)
-best_subset <- regsubsets(density ~ ., data = bodyfatmen, nbest = 5)
-summary(best_subset)
-# Create a new data point
-new_data <- data.frame(age = 25, weight = 175, height = 70, neck = 36, chest = 95, abdomen = 90, hip = 100, thigh = 60, knee= 100, ankle = 100, biceps= 100, forearm= 100, wrist=100)
-
-# Predict with confidence intervals
-predict(full_model, newdata = new_data, interval = "confidence")
-library(boot)
-cv_error <- cv.glm(bodyfatmen, full_model, K = 10)
-cv_error$delta
 
 ```
