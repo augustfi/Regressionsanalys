@@ -16,11 +16,11 @@ library(MASS)  # For studres
 library(MPV)   # If needed
 ```
 
-```{r Build model}
+```{r Build full model}
 bodyfat.model <- lm(density ~ age + weight + height + neck + chest + abdomen + hip + thigh + knee + ankle + biceps + forearm + wrist, data=bodyfatmen)
 ```
 
-```{r Coding Histogram and QQ-plot}
+```{r Histogram, QQ-plot and shapiro-test}
 model_residuals =bodyfat.model$residuals
 hist(model_residuals)
 qqnorm(rstudent(bodyfat.model))
@@ -35,13 +35,13 @@ shapiro.test(bodyfat.model$residuals)
 #if this test would be significant with a significance level of 0.05, we would have a violation of the normality assumption (H0: there is a normality -> p<=0.05 we reject H0, but for us p-value = 0.1212 on bodyfat.model)
 ```
 
-```{r Coding res v fit}
+```{r studentized residual v fitted value}
 res <- resid(bodyfat.model)
 plot(fitted(bodyfat.model), res)
 abline(0,0)
 ```
 
-```{r Coding res v leverage and cooks distance}
+```{r res v leverage and cooks distance}
 #outlier detection using ols: https://www.youtube.com/watch?v=EOtXGwUU81w&list=PLqdBkA4Dl3KqNqXe41mOLbpOBLpLZbPI9&index=7
 
 #install.packages("olsrr")
@@ -533,3 +533,70 @@ ggplot(data = XtX_melted, aes(x = Var1, y = Var2, fill = value)) +
   labs(title = "Correlation Matrix Heatmap", fill = "Correlation")
 
 ```
+
+
+```{r Bootstrap}
+B <- 1000  # Number of bootstrap iterations
+fitted_values <- bestbicmodel$fitted.values
+original_residuals <- bestbicmodel$residuals
+coef_boot <- matrix(NA, nrow = B, ncol = length(coef(bestbicmodel)))
+colnames(coef_boot) <- names(coef(bestbicmodel))
+set.seed(123)
+
+
+for(i in 1:B) {
+  # 1. Resample the residuals
+  boot_residuals <- sample(original_residuals, size = length(original_residuals), replace = TRUE)
+  
+  # 2. Form new y-values: fitted + resampled residuals
+  y_boot <- fitted_values + boot_residuals
+  
+  # 3. Refit the model using the new y-values
+  boot_model <- lm(update(bestbicmodel, y_boot ~ .))
+  
+  # 4. Store coefficients
+  coef_boot[i, ] <- coef(boot_model)
+}
+
+
+# Compute bootstrap standard errors
+boot_se <- apply(coef_boot, 2, sd)
+print(boot_se)
+
+# Construct 95% percentile-based confidence intervals
+alpha <- 0.05
+boot_ci <- t(apply(coef_boot, 2, quantile, probs = c(alpha/2, 1 - alpha/2)))
+print(boot_ci)
+
+```
+
+```{r Bootstrapping version 2}
+# MPV-style Bootstrap Example for the Bodyfat Model
+
+# Load the required libraries
+library(MPV)
+library(car)
+
+# Define a vector of bootstrap replication counts
+m_values <- c(100, 200, 300, 400, 500)
+
+# Create a results data frame to store the standard deviation of the 2nd coefficient
+results <- data.frame(m = m_values, case = NA, residual = NA)
+
+# Perform bootstrapping for each specified R value
+for (i in 1:length(m_values)) {
+  # Case resampling bootstrap
+  bodyfat.case <- Boot(bestbicmodel, R = m_values[i], method = "case")
+  results$case[i] <- sd(bodyfat.case$t[, 2])
+  
+  # Residual bootstrap
+  bodyfat.res <- Boot(bestbicmodel, R = m_values[i], method = "residual")
+  results$residual[i] <- sd(bodyfat.res$t[, 2])
+}
+
+# Print the results
+print(results)
+
+
+```
+
