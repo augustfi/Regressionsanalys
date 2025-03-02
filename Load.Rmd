@@ -10,6 +10,8 @@ bodyfatmen <- read.csv("/Users/augustfilannino/Documents/Regressionsanalys/bodyf
 ```{r Libraries}
 
 #install.packages("car")
+install.packages("olsrr")  # install if you haven't
+library(olsrr)
 
 library(car)   # For avPlots
 library(MASS)  # For studres
@@ -90,6 +92,7 @@ adj_r_squared <- model_summary$adj.r.squared
 # Print the values
 print(paste("R-squared:", r_squared))
 print(paste("Adjusted R-squared:", adj_r_squared))
+
 ```
 
 ```{r QQ-plot and Studentized residual vs fitted value plot}
@@ -409,8 +412,8 @@ print(best.model.cp)
 # Fit the models
 bestaicmodel <- lm(density ~ age + weight + neck + abdomen + hip + thigh + biceps + forearm + wrist, data = bodyfatmen)
 bestbicmodel <- lm(density ~ weight + abdomen + forearm + wrist, data = bodyfatmen)
-bestrmodel  <- lm(density ~ age + weight + neck + abdomen + hip + thigh + biceps + forearm + wrist, data = bodyfatmen)
-bestcpmodel <- lm(density ~ age + weight + neck + abdomen + hip + wrist + abdomen * wrist, data = bodyfatmen)
+bestrmodel  <- lm(density ~ age + weight + neck + abdomen + hip + thigh + ankle + biceps + forearm + wrist, data = bodyfatmen)
+bestcpmodel <- lm(density ~ age + weight + neck + abdomen + hip + thigh + forearm + wrist, data = bodyfatmen)
 combomodel  <- lm(density ~ abdomen * thigh * hip / weight + age + chest + wrist, data = bodyfatmen)
 
 # Store models in a list for convenience
@@ -436,46 +439,6 @@ cat("\nMean Squared Errors (MSE):\n")
 print(mse)
 
 ```
-
-```{r Product regressors too}
-# Load the MASS package (install if needed)
-if (!require(MASS)) install.packages("MASS")
-library(MASS)
-
-# Define a full model with pairwise interactions as an example
-full_formula <- as.formula("density ~ (age + weight + height + neck + chest + abdomen +
-                                     hip + thigh + knee + ankle + biceps + forearm + wrist)^2")
-
-# Fit the full model
-full_model <- lm(full_formula, data = bodyfatmen)
-
-# Number of observations
-n_obs <- nrow(bodyfatmen)
-
-# Perform stepwise selection using BIC by setting k = log(n)
-bic_modelproduct <- stepAIC(full_model, direction = "both", k = log(n_obs), trace = FALSE)
-
-# Display the selected model's summary
-summary(bic_model)
-
-# Display the selected model formula
-cat("Selected Model Formula (using BIC):\n")
-print(formula(bic_model))
-
-#MSE for bic_model
-predictions <-predict(bic_modelproduct, newdata= bodyfatmen)
-mse_bic <- mean((bodyfatmen$density-predictions)^2)
-cat(mse_bic)
-
-bicmulti <- lm(formula = density ~ weight + height + neck + chest + abdomen + 
-    hip + thigh + ankle + forearm + wrist + weight*wrist + height*wrist + 
-    neck*abdomen + neck*thigh + neck*forearm + neck*wrist + chest*abdomen + 
-    hip*wrist + ankle*wrist + forearm*wrist, data = bodyfatmen)
-summary(bicmulti)
-
-```
-
-
 
 ```{r Multicollinearity}
 # Load necessary libraries
@@ -535,12 +498,13 @@ ggplot(data = XtX_melted, aes(x = Var1, y = Var2, fill = value)) +
 ```
 
 
-```{r Bootstrap}
+```{r Bootstrap CI}
+model <- bestbicmodel
 B <- 1000  # Number of bootstrap iterations
-fitted_values <- bestbicmodel$fitted.values
-original_residuals <- bestbicmodel$residuals
-coef_boot <- matrix(NA, nrow = B, ncol = length(coef(bestbicmodel)))
-colnames(coef_boot) <- names(coef(bestbicmodel))
+fitted_values <- model$fitted.values
+original_residuals <- model$residuals
+coef_boot <- matrix(NA, nrow = B, ncol = length(coef(model)))
+colnames(coef_boot) <- names(coef(model))
 set.seed(123)
 
 
@@ -552,7 +516,7 @@ for(i in 1:B) {
   y_boot <- fitted_values + boot_residuals
   
   # 3. Refit the model using the new y-values
-  boot_model <- lm(update(bestbicmodel, y_boot ~ .))
+  boot_model <- lm(update(model, y_boot ~ .))
   
   # 4. Store coefficients
   coef_boot[i, ] <- coef(boot_model)
@@ -570,7 +534,79 @@ print(boot_ci)
 
 ```
 
-```{r Bootstrapping version 2}
+```{r Bootstrap }
+# Number of bootstrap iterations
+B <- 10000 
+
+# Extract needed quantities from the original model
+fitted_values <- model$fitted.values
+original_residuals <- model$residuals
+n <- length(original_residuals)
+
+# Prepare a matrix to store all bootstrapped coefficients
+coef_boot <- matrix(NA, nrow = B, ncol = length(coef(model)))
+colnames(coef_boot) <- names(coef(model))
+
+set.seed(123)  # for reproducibility
+
+for (i in 1:B) {
+  # 1) Resample residuals with replacement
+  boot_residuals <- sample(original_residuals, size = n, replace = TRUE)
+  
+  # 2) Create new y-values
+  y_boot <- fitted_values + boot_residuals
+  
+  # 3) Refit the model using the new y-values
+  #    We'll use update(..., formula. = .) or a direct approach
+  boot_model <- lm(y_boot ~ weight + abdomen + forearm + wrist,
+                   data = bodyfatmen)
+  
+  # 4) Store coefficients
+  coef_boot[i, ] <- coef(boot_model)
+}
+
+# Convert coef_boot to a data frame
+df_boot <- as.data.frame(coef_boot)
+
+# Reshape into a long format for ggplot
+# install.packages("reshape2")  # if you haven't installed it already
+library(reshape2)
+df_long <- melt(df_boot, variable.name = "coefficient", value.name = "value")
+
+# Compute 2.5% and 97.5% quantiles per coefficient
+quantiles <- apply(coef_boot, 2, quantile, probs = c(0.025, 0.975))
+quantiles_df <- data.frame(
+  coefficient = colnames(coef_boot),
+  lower = quantiles[1, ],
+  upper = quantiles[2, ]
+)
+
+# Get the original (non-bootstrapped) coefficient estimates
+orig_coef_df <- data.frame(
+  coefficient = names(coef(model)),
+  estimate    = coef(model)
+)
+
+# Now, use ggplot to create facet-wrapped histograms
+library(ggplot2)
+ggplot(df_long, aes(x = value)) +
+  geom_histogram(bins = 30) +
+  facet_wrap(~ coefficient, scales = "free") +
+  # Add vertical lines for the percentile-based CIs
+  geom_vline(data = quantiles_df, aes(xintercept = lower), color = "red") +
+  geom_vline(data = quantiles_df, aes(xintercept = upper), color = "red") +
+  # Optional: vertical line for the original estimate
+  geom_vline(data = orig_coef_df, aes(xintercept = estimate), 
+             color = "blue", linetype = "dashed") +
+  labs(x = "Coefficient Value", y = "Frequency",
+       title = "Bootstrap Distributions for Each Coefficient \nwith 95% Percentile CIs") +
+  theme_bw()
+
+
+```
+
+
+```{r Bootstrapping residuals}
 # MPV-style Bootstrap Example for the Bodyfat Model
 
 # Load the required libraries
@@ -586,11 +622,11 @@ results <- data.frame(m = m_values, case = NA, residual = NA)
 # Perform bootstrapping for each specified R value
 for (i in 1:length(m_values)) {
   # Case resampling bootstrap
-  bodyfat.case <- Boot(bestbicmodel, R = m_values[i], method = "case")
+  bodyfat.case <- Boot(model, R = m_values[i], method = "case")
   results$case[i] <- sd(bodyfat.case$t[, 2])
   
   # Residual bootstrap
-  bodyfat.res <- Boot(bestbicmodel, R = m_values[i], method = "residual")
+  bodyfat.res <- Boot(model, R = m_values[i], method = "residual")
   results$residual[i] <- sd(bodyfat.res$t[, 2])
 }
 
